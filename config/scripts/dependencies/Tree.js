@@ -1,4 +1,7 @@
-var Tree = function();
+var Tree = function(nodes) {
+  this.nodes = nodes;
+};
+
 var Node = function(entity, children) {
   this.entity = entity;
   this.children = children;
