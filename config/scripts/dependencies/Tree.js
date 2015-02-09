@@ -1,6 +1,18 @@
 var Tree = function();
-var Node = function(entity) {
+var Node = function(entity, children) {
   this.entity = entity;
+  this.children = children;
+  Node.prototype = {
+    /*
+    This function allows you to visualizate the scene.
+    It calls the entity 'beginDraw' and 'endDraw' methods
+    */
+    draw = function() {
+      this.entity.beginDraw();
+      this.children.forEach(function(child){ child.draw();});
+      this.entity.endDraw();
+    }
+  }
 
 }
 
