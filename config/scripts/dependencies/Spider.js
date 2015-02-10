@@ -45,7 +45,7 @@ var Spider = {
   width   : 800,
   height  : 800,
   names : ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"],
-  buffer  : Spider.gl.createBuffer(),
+  buffer  : null,
 
   //__functions
   startWeb: function(canvasId, width, height) {
@@ -62,6 +62,10 @@ var Spider = {
         };
         i++;
     }
+  },
+
+  createBuffer: function() {
+    Spider.gl.createBuffer();
   },
 
   isStarted: function() {
