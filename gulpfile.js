@@ -13,13 +13,6 @@ gulp.task('lint', function() {
         .pipe(jshint.reporter('default'));
 });
 
-// gulp.task('sass', function() {
-//     return gulp.src('config/styles/*.scss')
-//         .pipe(sass())
-//         .pipe(concat('style.css'))
-//         .pipe(gulp.dest('assets/styles'));
-// });
-
 gulp.task('scripts', function() {
     return gulp.src('lib/Aubengine.js')
         .pipe(browserify())

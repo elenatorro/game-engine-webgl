@@ -1,15 +1,15 @@
-#Default TDD boilerplate
+#Aubengine
 
-###Default folder structure for doing TDD excercises with vanilla Javascript, Mocha and Should.
+###Game Engine for WebGL
 
 ##Instructions
 
 1. Clone the repository
 
 ```
-$ git clone https://github.com/elenatorro/Default-TDD-boilerplate-JS.git
+$ git clone https://github.com/elenatorro/game-engine-webgl
 
-$ cd Default-TDD-boilerplate
+$ cd game-engine-webgl
 ```
 2. Install node modules
 
@@ -17,9 +17,12 @@ $ cd Default-TDD-boilerplate
 $ npm install
 ```
 
-**Note**: you will need to install the missing packages.
+3. Compile the main file, if needed
+```
+$ gulp
+```
 
-3. Run the default test
+4. Test command
 
 ```
 $ npm test
@@ -27,15 +30,18 @@ $ npm test
 
 ##Structure
 
+Main library:
+
 ```
-lib/DefaultObject.js
+lib/Aubengine.js
 ```
 
-Create your objects following this object structure. Don't forget to export it at the end.
+Scene-Tree and modules
+```
+lib/*.js
+```
 
+Tests
 ```
 test/test.js
 ```
-Here is where you have to write your test. 'Describe' is used to group a sort of unit test that test the same field.
-
-Don't forget to require the default object at the beginning of the file.
