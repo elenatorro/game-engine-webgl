@@ -14,8 +14,9 @@ gulp.task('lint', function() {
 });
 
 gulp.task('scripts', function() {
-    return gulp.src('lib/Aubengine.js')
+    return gulp.src('lib/main.js')
         .pipe(browserify())
+        .pipe(rename('Aubengine.js'))
         .pipe(gulp.dest('dist'))
         .pipe(rename('Aubengine.min.js'))
         .pipe(uglify())
