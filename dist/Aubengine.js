@@ -79,11 +79,11 @@ var Entity, exports;
 
 Entity = (function() {
   function Entity(attributes) {
-    this.attributes    = attributes;
+    this.attributes = attributes;
   }
 
 Entity.prototype.beginDraw = function(attribute) {};
-Entity.prototype.endDraw   = function(attribute) {};
+Entity.prototype.endDraw   = function(attribute) {}; //desapila
 
   return Entity;
 })();
@@ -106,8 +106,16 @@ NodeTree = (function() {
     return this.father;
   };
 
+  NodeTree.prototype.setFather = function(father) {
+    this.father = father;
+  }
+
+  NodeTree.prototype.getEntity = function() {
+    return this.entity;
+  }
+
   NodeTree.prototype.index = function() {
-    if (!isRoot()) return this.father.children.indexOf(this);
+    if (!this.isRoot()) return this.father.children.indexOf(this);
   }
 
   NodeTree.prototype.isRoot = function() {
@@ -119,10 +127,15 @@ NodeTree = (function() {
   };
 
   NodeTree.prototype.nextSibling = function() {
-    return ((!this.isRoot()) && (this.father.existsChild(this.index +1))) ? this.father.getChild(this.index() +1) : null;
+    return ((!this.isRoot()) && (this.hasSibling())) ? this.father.getChild(this.index() +1) : null;
   };
 
+  NodeTree.prototype.hasSibling = function() {
+    return (this.father.existsChild(this.father.getChild(this.index() +1 )));
+  }
+
   NodeTree.prototype.addChild = function(child) {
+    child.setFather(this);
     this.children.push(child);
   };
 
@@ -131,7 +144,7 @@ NodeTree = (function() {
   };
 
   NodeTree.prototype.getChild = function(index) {
-    return (this.existsChild(index)) ? this.children[index] : null;
+    return (this.existsChild(this.children[index])) ? this.children[index] : null;
   };
 
   NodeTree.prototype.firstChild = function() {
@@ -143,7 +156,6 @@ NodeTree = (function() {
   };
 
   NodeTree.prototype.removeChild = function(child) {
-    /* TODO: correr los elementos del array */
     (this.existsChild(child)) ? this.children.splice(this.index(), 1) : false;
   };
 
@@ -160,9 +172,9 @@ NodeTree = (function() {
   };
 
   NodeTree.prototype.draw = function() {
-    this.entity.beginDraw();
-    this.children.forEach(function(child){ child.draw();});
-    this.entity.endDraw();
+    if (this.entity) this.entity.beginDraw();
+    this.children.forEach(function(child){child.draw();});
+    if (this.entity) this.entity.endDraw();
   };
 
   return NodeTree;
@@ -224,17 +236,19 @@ exports = module.exports = Shader;
 
 },{"./Aubengine":1}],5:[function(require,module,exports){
 'use strict';
-/* Tree */
-// -- Object ------------------------------------------------------
-var NodeTree = require('./NodeTree.js');
+
 var Tree, exports;
-Tree = (function(parent) {
-  function Tree(parent) {
-    this.parent          = parent;
+Tree = (function(root) {
+  function Tree(root) {
+    this.root            = root;
     this.entityMatrix    = [];
   }
 
   Tree.prototype = {
+    getRoot : function() {
+      return this.root;
+    },
+
     preorder  : function(node, doSomething) {
         if (node == null) return;
         doSomething(node);
@@ -243,21 +257,20 @@ Tree = (function(parent) {
     },
 
     inorder   : function() {
-
+      /* TODO */
     },
 
     postorder : function() {
-
+      /* TODO */
     }
   }
 
   return Tree;
 })();
 
-// -- Export ------------------------------------------------------
 exports = module.exports = Tree;
 
-},{"./NodeTree.js":3}],6:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 'use strict';
 
 var Entity     = require('./Entity')
