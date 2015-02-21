@@ -1,6 +1,8 @@
 var should   = require("should");
-var NodeTree = require("../lib/NodeTree")
-var Tree     = require("../lib/Tree")
+var NodeTree = require("../lib/NodeTree");
+var Tree     = require("../lib/Tree");
+var Resource = require("../lib/Resource");
+var ResourceManager = require("../lib/ResourceManager");
 
 var root = new NodeTree(null, '', []);
 
@@ -46,16 +48,44 @@ describe('Testing Nodes: ', function() {
 
 describe('Testing Tree: ', function() {
   describe('Tree element', function() {
-    var root = new NodeTree(null, '', []);
+    var root = new NodeTree('', '', []);
     var tree = new Tree(root);
     var node = '';
-    var i, j, k = 0;
-    for (i; i < 10; i++) {
-      node = new NodeTree(i, root, []);
-      tree.getRoot().addChild(node);
-    };
+    var son  = '';
+    var i = 0;
+    var j = 0;
+
     it('Preorder', function() {
-      console.log(tree);
+      for (i; i < 10; i++) {
+        node = new NodeTree(i, root, []);
+        tree.getRoot().addChild(node);
+        for (j; j < 10; j+=2) {
+          son = new NodeTree(j, node, []);
+          node.addChild(son);
+        }
+      };
+      tree.preorder(root, console.log);
+    })
+  })
+})
+
+
+describe('Testing resources: ', function() {
+  describe('Loading file', function() {
+    var rm = new ResourceManager('test/prueba.txt');
+    it('Load File', function() {
+      rm.getFileContent()[0].should.eql('first#');
+    }),
+    it('Read name', function() {
+      rm.readName('first#data').should.eql('first');
+    }),
+    it('Add resource', function() {
+      var r = new Resource('name', 'data');
+      rm.writeResource(r);
+      rm.getFileContent()[1].should.eql('name#data');
+    }),
+    it('Search resource', function() {
+      rm.searchResource('name').should.eql('name#data');
     })
   })
 })
