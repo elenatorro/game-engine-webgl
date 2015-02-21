@@ -8,7 +8,10 @@
     "url": "https://github.com/elenatorro"
   },
   "dependencies": {
-    "coffee-script": "*"
+    "coffee-script": "*",
+    "fs": "0.0.2",
+    "jsonfile": "^2.0.0",
+    "read-file": "^0.1.2"
   },
   "devDependencies": {
     "browserify": "^8.1.3",
