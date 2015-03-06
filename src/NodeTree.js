@@ -1,12 +1,11 @@
 'use strict';
 
-var NodeTree, exports;
-
-NodeTree = (function() {
-  function NodeTree(entity, father, children) {
+function NodeTree(entity, father, children) {
     this.entity    = entity   || '';
-    this.father    = father   || '';
     this.children  = children || [];
+
+    if (father) father.addChild(this);
+    else this.father = '';
   }
 
   NodeTree.prototype.getFather = function() {
@@ -14,7 +13,8 @@ NodeTree = (function() {
   };
 
   NodeTree.prototype.setFather = function(father) {
-    this.father = father;
+    if (father instanceof NodeTree) this.father = father;
+    else console.log('This is not a node');
   }
 
   NodeTree.prototype.getEntity = function() {
@@ -22,7 +22,8 @@ NodeTree = (function() {
   }
 
   NodeTree.prototype.setEntity = function(entity) {
-    this.entity = entity;
+    if (entity instanceof Entity) this.entity = entity;
+    else console.log('This is not an entity');
   }
 
   NodeTree.prototype.index = function() {
@@ -84,15 +85,12 @@ NodeTree = (function() {
 
   NodeTree.prototype.draw = function() {
     if (this.entity) {
-      var children = this.children;
-      this.entity.beginDraw(children);
-      this.entity.endDraw();
+      this.entity.draw();
     } else {
       console.log('There is no entity for this node');
     }
   };
 
-  return NodeTree;
-})();
+  NodeTree.prototype.endDraw = function() {
 
-exports = module.exports = NodeTree;
+  }

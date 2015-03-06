@@ -1,11 +1,8 @@
 'use strict';
 
-var Color, exports;
-
-Color = (function() {
-  function Color(hex) {
+function Color(hex) {
     this.hex  = hex || '#FFFFFF';
-    this.rgba = this.hex2rgb(this.hex, 1);
+    this.rgba = null;
     this.vec  = null;
   }
 
@@ -32,7 +29,7 @@ Color = (function() {
 
   Color.prototype.setColorHex = function(hex, opacity) {
     this.hex      = hex;
-    this.rgba     = this.rgba(hex, opacity || 1);
+    this.rgba     = this.hex2rgb(hex, opacity || 1);
     this.vec      = vec4(this.rgba[0],this.rgba[1],this.rgba[2],this.rgba[3]);
   }
 
@@ -41,14 +38,9 @@ Color = (function() {
   };
 
   Color.prototype.getRgba = function() {
-    return this.rgba;
+    return this.hex2rgb(this.hex, 1);
   };
 
   Color.prototype.getVec  = function() {
     return this.vec;
   };
-
-  return Color;
-})();
-
-exports = module.exports = Color;
