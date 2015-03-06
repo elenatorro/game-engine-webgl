@@ -36,1102 +36,1194 @@ quat4.toMat4=function(a,b){b||(b=mat4.create());var c=a[0],d=a[1],e=a[2],g=a[3],
 quat4.slerp=function(a,b,c,d){d||(d=a);var e=a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3],g,f;if(1<=Math.abs(e))return d!==a&&(d[0]=a[0],d[1]=a[1],d[2]=a[2],d[3]=a[3]),d;g=Math.acos(e);f=Math.sqrt(1-e*e);if(0.001>Math.abs(f))return d[0]=0.5*a[0]+0.5*b[0],d[1]=0.5*a[1]+0.5*b[1],d[2]=0.5*a[2]+0.5*b[2],d[3]=0.5*a[3]+0.5*b[3],d;e=Math.sin((1-c)*g)/f;c=Math.sin(c*g)/f;d[0]=a[0]*e+b[0]*c;d[1]=a[1]*e+b[1]*c;d[2]=a[2]*e+b[2]*c;d[3]=a[3]*e+b[3]*c;return d};
 quat4.str=function(a){return"["+a[0]+", "+a[1]+", "+a[2]+", "+a[3]+"]"};
 
-var K3D = {};
+var gl = null;
+var prg = null;
+var c_width = 0;
+var c_height = 0;
+var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
+var interactor = null;
 
-K3D.load = function(path, resp)
-{
-	var request = new XMLHttpRequest();
-	request.open("GET", path, true);
-	request.responseType = "arraybuffer";
-	request.onload = function(e){resp(e.target.response);};
-	request.send();
-}
+var	Configuration = {
 
-K3D.save = function(buff, path)
-{
-	var dataURI = "data:application/octet-stream;base64," + btoa(K3D.parse._buffToStr(buff));
-	window.location.href = dataURI;
-}
+	getGLContext : function(name, width, height){
+		var canvas  = document.getElementById(name);
+		var context = null;
 
-K3D.clone = function(o)
-{
-	return JSON.parse(JSON.stringify(o));
-}
-
-
-
-K3D.bin = {};
-
-K3D.bin.f  = new Float32Array(1);
-K3D.bin.fb = new Uint8Array(K3D.bin.f.buffer);
-
-K3D.bin.rf		= function(buff, off) { var f = K3D.bin.f, fb = K3D.bin.fb; for(var i=0; i<4; i++) fb[i] = buff[off+i]; return f[0]; }
-K3D.bin.rsl		= function(buff, off) { return buff[off] | buff[off+1]<<8; }
-K3D.bin.ril		= function(buff, off) { return buff[off] | buff[off+1]<<8 | buff[off+2]<<16 | buff[off+3]<<24; }
-K3D.bin.rASCII0 = function(buff, off) { var s = ""; while(buff[off]!=0) s += String.fromCharCode(buff[off++]); return s; }
-
-
-K3D.bin.wf		= function(buff, off, v) { var f=new Float32Array(buff.buffer, off, 1); f[0]=v; }
-K3D.bin.wsl		= function(buff, off, v) { buff[off]=v; buff[off+1]=v>>8; }
-K3D.bin.wil		= function(buff, off, v) { buff[off]=v; buff[off+1]=v>>8; buff[off+2]=v>>16; buff[off+3]>>24; }
-K3D.parse = {};
-
-K3D.parse._buffToStr = function(buff)
-{
-	var a = new Uint8Array(buff);
-	var s = "";
-	for(var i=0; i<a.length; i++) s = s.concat(String.fromCharCode(a[i]));
-	return s;
-}
-
-K3D.parse._strToBuff = function(str)
-{
-  var buf = new ArrayBuffer(str.length);
-  var bufView = new Uint8Array(buf);
-  for (var i=0; i<str.length; i++) bufView[i] = str.charCodeAt(i);
-  return buf;
-}
-
-K3D.parse._readLine = function(a, off)	// Uint8Array, offset
-{
-	var s = "";
-	while(a[off] != 10) s += String.fromCharCode(a[off++]);
-	return s;
-}
-K3D.parse.fromJSON = function(buff)
-{
-	var json = JSON.parse(K3D.parse._buffToStr(buff));
-	return json;
-}
-
-K3D.parse.toJSON = function(object)
-{
-	var str = JSON.stringify(object);
-	return K3D.parse._strToBuff(str);
-}
-
-K3D.parse.fromOBJ = function(buff)
-{
-	var res = {};
-	res.groups = {};
-
-	res.c_verts = [];
-	res.c_uvt	= [];
-	res.c_norms = [];
-
-	res.i_verts = [];
-	res.i_uvt   = [];
-	res.i_norms = [];
-
-	var cg = {from: 0, to:0};	// current group
-	var off = 0;
-	var a = new Uint8Array(buff);
-
-	while(off < a.length)
-	{
-		var line = K3D.parse._readLine(a, off);
-		off += line.length + 1;
-		line = line.replace(/ +(?= )/g,'');
-		line = line.replace(/(^\s+|\s+$)/g, '');
-		var cds = line.split(" ");
-		if(cds[0] == "g")
-		{
-			cg.to = res.i_verts.length;
-			if(res.groups[cds[1]] == null) res.groups[cds[1]] = {from:res.i_verts.length, to:0};
-			cg = res.groups[cds[1]];
+		if (canvas == null){
+			alert('Hey! There is no canvas!');
+			return null;
+		} else {
+			c_width  = canvas.width;
+			c_height = canvas.height;
 		}
-		if(cds[0] == "v")
-		{
-			var x = parseFloat(cds[1]);
-			var y = parseFloat(cds[2]);
-			var z = parseFloat(cds[3]);
-			res.c_verts.push(x,y,z);
-		}
-		if(cds[0] == "vt")
-		{
-			var x = parseFloat(cds[1]);
-			var y = 1-parseFloat(cds[2]);
-			res.c_uvt.push(x,y);
-		}
-		if(cds[0] == "vn")
-		{
-			var x = parseFloat(cds[1]);
-			var y = parseFloat(cds[2]);
-			var z = parseFloat(cds[3]);
-			res.c_norms.push(x,y,z);
-		}
-		if(cds[0] == "f")
-		{
-			var v0a = cds[1].split("/"), v1a = cds[2].split("/"), v2a = cds[3].split("/");
-			var vi0 = parseInt(v0a[0])-1, vi1 = parseInt(v1a[0])-1, vi2 = parseInt(v2a[0])-1;
-			var ui0 = parseInt(v0a[1])-1, ui1 = parseInt(v1a[1])-1, ui2 = parseInt(v2a[1])-1;
-			var ni0 = parseInt(v0a[2])-1, ni1 = parseInt(v1a[2])-1, ni2 = parseInt(v2a[2])-1;
 
-			var vlen = res.c_verts.length/3, ulen = res.c_uvt.length/2, nlen = res.c_norms.length/3;
-			if(vi0<0) vi0 = vlen + vi0+1; if(vi1<0) vi1 = vlen + vi1+1;	if(vi2<0) vi2 = vlen + vi2+1;
-			if(ui0<0) ui0 = ulen + ui0+1; if(ui1<0) ui1 = ulen + ui1+1;	if(ui2<0) ui2 = ulen + ui2+1;
-			if(ni0<0) ni0 = nlen + ni0+1; if(ni1<0) ni1 = nlen + ni1+1;	if(ni2<0) ni2 = nlen + ni2+1;
-
-			res.i_verts.push(vi0, vi1, vi2);  //cg.i_verts.push(vi0, vi1, vi2)
-			res.i_uvt  .push(ui0, ui1, ui2);  //cg.i_uvt  .push(ui0, ui1, ui2);
-			res.i_norms.push(ni0, ni1, ni2);  //cg.i_norms.push(ni0, ni1, ni2);
-			if(cds.length == 5)
-			{
-				var v3a = cds[4].split("/");
-				var vi3 = parseInt(v3a[0])-1, ui3 = parseInt(v3a[1])-1, ni3 = parseInt(v3a[2])-1;
-				if(vi3<0) vi3 = vlen + vi3+1;
-				if(ui3<0) ui3 = ulen + ui3+1;
-				if(ni3<0) ni3 = nlen + ni3+1;
-				res.i_verts.push(vi0, vi2, vi3);  //cg.i_verts.push(vi0, vi2, vi3);
-				res.i_uvt  .push(ui0, ui2, ui3);  //cg.i_uvt  .push(ui0, ui2, ui3);
-				res.i_norms.push(ni0, ni2, ni3);  //cg.i_norms.push(ni0, ni2, ni3);
+		for (var i = 0; i < names.length; ++i) {
+			try {
+				context = canvas.getContext(names[i]);
 			}
+			catch(e) {}
+				if (context) {
+					break;
+				}
+		}
+
+		if (context == null) {
+			alert("Sorry! Not posible to initialize :(");
+			return null;
+		} else {
+			return context;
+		}
+	},
+
+	requestAnimFrame : function(o){
+		requestAnimFrame(o);
+	},
+
+	//Triangles
+  calculateNormals : function(vs, ind){
+      var x=0;
+      var y=1;
+      var z=2;
+
+      var ns = [];
+      for(var i=0;i<vs.length;i=i+3){ //for each vertex, initialize normal x, normal y, normal z
+          ns[i+x]=0.0;
+          ns[i+y]=0.0;
+          ns[i+z]=0.0;
+      }
+
+      for(var i=0;i<ind.length;i=i+3){
+          var v1 = [];
+          var v2 = [];
+          var normal = [];
+          //p2 - p1
+          v1[x] = vs[3*ind[i+2]+x] - vs[3*ind[i+1]+x];
+          v1[y] = vs[3*ind[i+2]+y] - vs[3*ind[i+1]+y];
+          v1[z] = vs[3*ind[i+2]+z] - vs[3*ind[i+1]+z];
+          //p0 - p1
+          v2[x] = vs[3*ind[i]+x] - vs[3*ind[i+1]+x];
+          v2[y] = vs[3*ind[i]+y] - vs[3*ind[i+1]+y];
+          v2[z] = vs[3*ind[i]+z] - vs[3*ind[i+1]+z];
+          normal[x] = v1[y]*v2[z] - v1[z]*v2[y];
+          normal[y] = v1[z]*v2[x] - v1[x]*v2[z];
+          normal[z] = v1[x]*v2[y] - v1[y]*v2[x];
+          for(j=0;j<3;j++){ //suma de vectores
+              ns[3*ind[i+j]+x] =  ns[3*ind[i+j]+x] + normal[x];
+              ns[3*ind[i+j]+y] =  ns[3*ind[i+j]+y] + normal[y];
+              ns[3*ind[i+j]+z] =  ns[3*ind[i+j]+z] + normal[z];
+          }
+      }
+      //normalizacion
+      for(var i=0;i<vs.length;i=i+3){
+
+          var nn=[];
+          nn[x] = ns[i+x];
+          nn[y] = ns[i+y];
+          nn[z] = ns[i+z];
+
+          var len = Math.sqrt((nn[x]*nn[x])+(nn[y]*nn[y])+(nn[z]*nn[z]));
+          if (len == 0) len = 1.0;
+
+          nn[x] = nn[x]/len;
+          nn[y] = nn[y]/len;
+          nn[z] = nn[z]/len;
+
+          ns[i+x] = nn[x];
+          ns[i+y] = nn[y];
+          ns[i+z] = nn[z];
+      }
+
+      return ns;
+  },
+
+    calculateTangents : function(vs, tc, ind){
+        var i;
+        var tangents = [];
+        for(i=0;i<vs.length/3; i++){
+            tangents[i]=[0, 0, 0];
+        }
+
+
+        var a = [0, 0, 0], b = [0, 0, 0];
+        var triTangent = [0, 0, 0];
+        for(i = 0; i < ind.length; i+=3) {
+            var i0 = ind[i+0];
+            var i1 = ind[i+1];
+            var i2 = ind[i+2];
+
+            var pos0 = [ vs[i0 * 3], vs[i0 * 3 + 1], vs[i0 * 3 + 2] ];
+            var pos1 = [ vs[i1 * 3], vs[i1 * 3 + 1], vs[i1 * 3 + 2] ];
+            var pos2 = [ vs[i2 * 3], vs[i2 * 3 + 1], vs[i2 * 3 + 2] ];
+
+            var tex0 = [ tc[i0 * 2], tc[i0 * 2 + 1] ];
+            var tex1 = [ tc[i1 * 2], tc[i1 * 2 + 1] ];
+            var tex2 = [ tc[i2 * 2], tc[i2 * 2 + 1] ];
+
+            vec3.subtract(pos1, pos0, a);
+            vec3.subtract(pos2, pos0, b);
+
+            var c2c1t = tex1[0] - tex0[0];
+            var c2c1b = tex1[1] - tex0[1];
+            var c3c1t = tex2[0] - tex0[0];
+            var c3c1b = tex2[0] - tex0[1];
+
+            triTangent = [c3c1b * a[0] - c2c1b * b[0], c3c1b * a[1] - c2c1b * b[1], c3c1b * a[2] - c2c1b * b[2]];
+
+            vec3.add(tangents[i0], triTangent);
+            vec3.add(tangents[i1], triTangent);
+            vec3.add(tangents[i2], triTangent);
+        }
+
+        //normalizacion
+        var ts = [];
+        for(i=0;i<tangents.length; i++){
+            var tan = tangents[i];
+            vec3.normalize(tan);
+            ts.push(tan[0]);
+            ts.push(tan[1]);
+            ts.push(tan[2]);
+        }
+
+        return ts;
+    }
+}
+
+requestAnimFrame = (function() {
+    return window.requestAnimationFrame ||
+         window.webkitRequestAnimationFrame ||
+         window.mozRequestAnimationFrame ||
+         window.oRequestAnimationFrame ||
+         window.msRequestAnimationFrame ||
+         function(callback, element) {
+           window.setTimeout(callback, 1000/60);
+         };
+})();
+
+function Light(name){
+	this.id = name;
+	this.position = [0.0,0.0,0.0];
+	this.ambient = [0.0,0.0,0.0,0.0];
+	this.diffuse = [0.0,0.0,0.0,0.0];
+	this.specular = [0.0,0.0,0.0,0.0];
+}
+
+Light.prototype.setPosition = function(p){
+	this.position = p.slice(0);
+}
+Light.prototype.setDiffuse = function (d){
+	this.diffuse = d.slice(0);
+}
+
+Light.prototype.setAmbient = function(a){
+	this.ambient = a.slice(0);
+}
+
+Light.prototype.setSpecular = function(s){
+	this.specular = s.slice(0);
+}
+
+Light.prototype.setProperty = function(pName, pValue){
+	if(typeof pName == 'string'){
+		if (pValue instanceof Array){
+			this[pName] = pValue.slice(0);
+		}
+		else {
+			this[pName] = pValue;
 		}
 	}
-	cg.to = res.i_verts.length;
-
-	return res;
+	else{
+		throw 'The property name must be a string';
+	}
 }
 
-
-K3D.parse.fromMD2 = function(buff)
-{
-	buff = new Uint8Array(buff);
-	var res = {};
-	var head = {};
-	//res.head = head;
-	head.ident			= K3D.bin.ril(buff,  0);             /* magic number: "IDP2" */
-	head.version		= K3D.bin.ril(buff,  4);             /* version: must be 8 */
-
-	head.skinwidth		= K3D.bin.ril(buff,  8);             /* texture width */
-	head.skinheight		= K3D.bin.ril(buff, 12);             /* texture height */
-
-	head.framesize		= K3D.bin.ril(buff, 16);             /* size in bytes of a frame */
-
-	head.num_skins		= K3D.bin.ril(buff, 20);             /* number of skins */
-	head.num_vertices	= K3D.bin.ril(buff, 24);             /* number of vertices per frame */
-	head.num_st			= K3D.bin.ril(buff, 28);             /* number of texture coordinates */
-	head.num_tris		= K3D.bin.ril(buff, 32);             /* number of triangles */
-	head.num_glcmds		= K3D.bin.ril(buff, 36);             /* number of opengl commands */
-	head.num_frames		= K3D.bin.ril(buff, 40);             /* number of frames */
-
-	head.offset_skins	= K3D.bin.ril(buff, 44);             /* offset skin data */
-	head.offset_st		= K3D.bin.ril(buff, 48);             /* offset texture coordinate data */
-	head.offset_tris	= K3D.bin.ril(buff, 52);             /* offset triangle data */
-	head.offset_frames	= K3D.bin.ril(buff, 56);             /* offset frame data */
-	head.offset_glcmds	= K3D.bin.ril(buff, 60);             /* offset OpenGL command data */
-	head.offset_end		= K3D.bin.ril(buff, 64);             /* offset end of file */
-
-	var off = head.offset_st;
-	res.c_uvt = [];
-	for(var i=0; i<head.num_st; i++)
-	{
-		var x = K3D.bin.rsl(buff, off  )/head.skinwidth;
-		var y = K3D.bin.rsl(buff, off+2)/head.skinheight;
-		res.c_uvt.push(x,y);  off += 4;
-	}
-
-	var off = head.offset_tris;
-	var vi = [], ti = [];
-	res.i_verts = vi;
-	res.i_uvt = ti;
-	//res.tris = {i_verts : vi, i_uvt : ti};
-	for(var i=0; i<head.num_tris; i++)
-	{
-		vi.push(K3D.bin.rsl(buff, off  ), K3D.bin.rsl(buff, off+2), K3D.bin.rsl(buff, off+4 ));
-		ti.push(K3D.bin.rsl(buff, off+6), K3D.bin.rsl(buff, off+8), K3D.bin.rsl(buff, off+10));
-		off += 12;
-	}
-
-	var off = head.offset_skins;
-	res.skins = [];
-	for(var i=0; i<head.num_skins; i++)
-	{
-		res.skins.push(K3D.bin.rASCII0(buff, off));
-		off += 64;
-	}
-
-	var off = head.offset_frames;
-	res.frames = [];
-	var nms = K3D.parse.fromMD2._normals;
-	for(var i=0; i<head.num_frames; i++)
-	{
-		var fr = {};
-		var sx = K3D.bin.rf(buff, off), sy = K3D.bin.rf(buff, off+4), sz = K3D.bin.rf(buff, off+8);  off += 12;
-		var tx = K3D.bin.rf(buff, off), ty = K3D.bin.rf(buff, off+4), tz = K3D.bin.rf(buff, off+8);  off += 12;
-		fr.name		 = K3D.bin.rASCII0(buff, off); off += 16;
-		fr.verts	 = [];
-		fr.norms	 = [];
-
-		for(var j=0; j<head.num_vertices; j++)
-		{
-			fr.verts.push(buff[off]*sx+tx, buff[off+1]*sy+ty, buff[off+2]*sz+tz);
-			fr.norms.push(nms[3*buff[off+3]], nms[3*buff[off+3]+1], nms[3*buff[off+3]+2]);
-			off += 4;
+var Lights = {
+	list : [],
+	add : function(light){
+		if (!(light instanceof Light)){
+			alert('the parameter is not a light');
+			return;
 		}
-		res.frames.push(fr);
-	}
-	return res;
-}
+		this.list.push(light);
+	},
 
-
-
-/*
-	static MD2 normals
-*/
-
-K3D.parse.fromMD2._normals =
-[
--0.525731,  0.000000,  0.850651,
--0.442863,  0.238856,  0.864188,
--0.295242,  0.000000,  0.955423,
--0.309017,  0.500000,  0.809017,
--0.162460,  0.262866,  0.951056,
- 0.000000,  0.000000,  1.000000,
- 0.000000,  0.850651,  0.525731,
--0.147621,  0.716567,  0.681718,
- 0.147621,  0.716567,  0.681718,
- 0.000000,  0.525731,  0.850651,
- 0.309017,  0.500000,  0.809017,
- 0.525731,  0.000000,  0.850651,
- 0.295242,  0.000000,  0.955423,
- 0.442863,  0.238856,  0.864188,
- 0.162460,  0.262866,  0.951056,
--0.681718,  0.147621,  0.716567,
--0.809017,  0.309017,  0.500000,
--0.587785,  0.425325,  0.688191,
--0.850651,  0.525731,  0.000000,
--0.864188,  0.442863,  0.238856,
--0.716567,  0.681718,  0.147621,
--0.688191,  0.587785,  0.425325,
--0.500000,  0.809017,  0.309017,
--0.238856,  0.864188,  0.442863,
--0.425325,  0.688191,  0.587785,
--0.716567,  0.681718, -0.147621,
--0.500000,  0.809017, -0.309017,
--0.525731,  0.850651,  0.000000,
- 0.000000,  0.850651, -0.525731,
--0.238856,  0.864188, -0.442863,
- 0.000000,  0.955423, -0.295242,
--0.262866,  0.951056, -0.162460,
- 0.000000,  1.000000,  0.000000,
- 0.000000,  0.955423,  0.295242,
--0.262866,  0.951056,  0.162460,
- 0.238856,  0.864188,  0.442863,
- 0.262866,  0.951056,  0.162460,
- 0.500000,  0.809017,  0.309017,
- 0.238856,  0.864188, -0.442863,
- 0.262866,  0.951056, -0.162460,
- 0.500000,  0.809017, -0.309017,
- 0.850651,  0.525731,  0.000000,
- 0.716567,  0.681718,  0.147621,
- 0.716567,  0.681718, -0.147621,
- 0.525731,  0.850651,  0.000000,
- 0.425325,  0.688191,  0.587785,
- 0.864188,  0.442863,  0.238856,
- 0.688191,  0.587785,  0.425325,
- 0.809017,  0.309017,  0.500000,
- 0.681718,  0.147621,  0.716567,
- 0.587785,  0.425325,  0.688191,
- 0.955423,  0.295242,  0.000000,
- 1.000000,  0.000000,  0.000000,
- 0.951056,  0.162460,  0.262866,
- 0.850651, -0.525731,  0.000000,
- 0.955423, -0.295242,  0.000000,
- 0.864188, -0.442863,  0.238856,
- 0.951056, -0.162460,  0.262866,
- 0.809017, -0.309017,  0.500000,
- 0.681718, -0.147621,  0.716567,
- 0.850651,  0.000000,  0.525731,
- 0.864188,  0.442863, -0.238856,
- 0.809017,  0.309017, -0.500000,
- 0.951056,  0.162460, -0.262866,
- 0.525731,  0.000000, -0.850651,
- 0.681718,  0.147621, -0.716567,
- 0.681718, -0.147621, -0.716567,
- 0.850651,  0.000000, -0.525731,
- 0.809017, -0.309017, -0.500000,
- 0.864188, -0.442863, -0.238856,
- 0.951056, -0.162460, -0.262866,
- 0.147621,  0.716567, -0.681718,
- 0.309017,  0.500000, -0.809017,
- 0.425325,  0.688191, -0.587785,
- 0.442863,  0.238856, -0.864188,
- 0.587785,  0.425325, -0.688191,
- 0.688191,  0.587785, -0.425325,
--0.147621,  0.716567, -0.681718,
--0.309017,  0.500000, -0.809017,
- 0.000000,  0.525731, -0.850651,
--0.525731,  0.000000, -0.850651,
--0.442863,  0.238856, -0.864188,
--0.295242,  0.000000, -0.955423,
--0.162460,  0.262866, -0.951056,
- 0.000000,  0.000000, -1.000000,
- 0.295242,  0.000000, -0.955423,
- 0.162460,  0.262866, -0.951056,
--0.442863, -0.238856, -0.864188,
--0.309017, -0.500000, -0.809017,
--0.162460, -0.262866, -0.951056,
- 0.000000, -0.850651, -0.525731,
--0.147621, -0.716567, -0.681718,
- 0.147621, -0.716567, -0.681718,
- 0.000000, -0.525731, -0.850651,
- 0.309017, -0.500000, -0.809017,
- 0.442863, -0.238856, -0.864188,
- 0.162460, -0.262866, -0.951056,
- 0.238856, -0.864188, -0.442863,
- 0.500000, -0.809017, -0.309017,
- 0.425325, -0.688191, -0.587785,
- 0.716567, -0.681718, -0.147621,
- 0.688191, -0.587785, -0.425325,
- 0.587785, -0.425325, -0.688191,
- 0.000000, -0.955423, -0.295242,
- 0.000000, -1.000000,  0.000000,
- 0.262866, -0.951056, -0.162460,
- 0.000000, -0.850651,  0.525731,
- 0.000000, -0.955423,  0.295242,
- 0.238856, -0.864188,  0.442863,
- 0.262866, -0.951056,  0.162460,
- 0.500000, -0.809017,  0.309017,
- 0.716567, -0.681718,  0.147621,
- 0.525731, -0.850651,  0.000000,
--0.238856, -0.864188, -0.442863,
--0.500000, -0.809017, -0.309017,
--0.262866, -0.951056, -0.162460,
--0.850651, -0.525731,  0.000000,
--0.716567, -0.681718, -0.147621,
--0.716567, -0.681718,  0.147621,
--0.525731, -0.850651,  0.000000,
--0.500000, -0.809017,  0.309017,
--0.238856, -0.864188,  0.442863,
--0.262866, -0.951056,  0.162460,
--0.864188, -0.442863,  0.238856,
--0.809017, -0.309017,  0.500000,
--0.688191, -0.587785,  0.425325,
--0.681718, -0.147621,  0.716567,
--0.442863, -0.238856,  0.864188,
--0.587785, -0.425325,  0.688191,
--0.309017, -0.500000,  0.809017,
--0.147621, -0.716567,  0.681718,
--0.425325, -0.688191,  0.587785,
--0.162460, -0.262866,  0.951056,
- 0.442863, -0.238856,  0.864188,
- 0.162460, -0.262866,  0.951056,
- 0.309017, -0.500000,  0.809017,
- 0.147621, -0.716567,  0.681718,
- 0.000000, -0.525731,  0.850651,
- 0.425325, -0.688191,  0.587785,
- 0.587785, -0.425325,  0.688191,
- 0.688191, -0.587785,  0.425325,
--0.955423,  0.295242,  0.000000,
--0.951056,  0.162460,  0.262866,
--1.000000,  0.000000,  0.000000,
--0.850651,  0.000000,  0.525731,
--0.955423, -0.295242,  0.000000,
--0.951056, -0.162460,  0.262866,
--0.864188,  0.442863, -0.238856,
--0.951056,  0.162460, -0.262866,
--0.809017,  0.309017, -0.500000,
--0.864188, -0.442863, -0.238856,
--0.951056, -0.162460, -0.262866,
--0.809017, -0.309017, -0.500000,
--0.681718,  0.147621, -0.716567,
--0.681718, -0.147621, -0.716567,
--0.850651,  0.000000, -0.525731,
--0.688191,  0.587785, -0.425325,
--0.587785,  0.425325, -0.688191,
--0.425325,  0.688191, -0.587785,
--0.425325, -0.688191, -0.587785,
--0.587785, -0.425325, -0.688191,
--0.688191, -0.587785, -0.425325
-];
-
-K3D.parse.fromCollada = function(buff)
-{
-	var str = K3D.parse._buffToStr(buff);
-	var xml = new DOMParser().parseFromString(str,"text/xml");
-	xml = xml.childNodes[0];
-	var resp = {};
-
-	//console.log(xml);
-
-	var ass = xml.getElementsByTagName("asset"             )[0];
-	var geo = xml.getElementsByTagName("library_geometries")[0];
-	var ima = xml.getElementsByTagName("library_images"    )[0];
-	var mat = xml.getElementsByTagName("library_materials" )[0];
-	var eff = xml.getElementsByTagName("library_effects"   )[0];
-
-	//console.log(xml);
-	if(ass) resp.asset 		= K3D.parse.fromCollada._asset        (ass);
-	if(geo) resp.geometries = K3D.parse.fromCollada._libGeometries(geo);
-	if(ima) resp.images     = K3D.parse.fromCollada._libImages    (ima);
-	if(mat) resp.materials  = K3D.parse.fromCollada._libMaterials (mat);
-	if(eff) resp.effects    = K3D.parse.fromCollada._libEffects   (eff);
-	return resp;
-}
-
-K3D.parse.fromCollada._asset = function(xml)
-{
-	//console.log(xml);
-	return {
-		created : xml.getElementsByTagName("created" )[0].textContent,
-		modified: xml.getElementsByTagName("modified")[0].textContent,
-		up_axis : xml.getElementsByTagName("up_axis" )[0].textContent
-	};
-}
-
-K3D.parse.fromCollada._libGeometries = function(xml)
-{
-	xml = xml.getElementsByTagName("geometry");
-	var res = [];
-	for(var i=0; i<xml.length; i++)
-	{
-		var g = xml[i];
-		var o = K3D.parse.fromCollada._getMesh(g.getElementsByTagName("mesh")[0]);
-		res.push(o);
-	}
-	return res;
-}
-
-K3D.parse.fromCollada._getMesh = function(mesh)
-{
-	//console.log(mesh);
-	var res = {};
-	var ss = mesh.getElementsByTagName("source");
-	var sources = res.sources = {};
-	for(var i=0; i<ss.length; i++)
-	{
-		var farr = ss[i].getElementsByTagName("float_array")[0].textContent.split(" ");
-		var fl = farr.length - (farr[farr.length-1] == "" ? 1 : 0);
-		var arr = new Array(fl);
-		for(var j=0; j<fl; j++) arr[j] = parseFloat(farr[j]);
-		sources[ss[i].getAttribute("id")] = arr;
-	}
-
-	res.triangles = [];
-	var tgs = mesh.getElementsByTagName("triangles");
-	if(tgs == null) return res;
-	for(var i=0; i<tgs.length; i++)
-	{
-		var t = {};
-		var tnode = tgs[i];
-		t.material = tnode.getAttribute("material");
-		var inputs = tnode.getElementsByTagName("input");
-		var inds = [];
-		for(var j=0; j<inputs.length; j++)
-		{
-			var inp = inputs[j], arr = [];
-			inds[parseInt(inp.getAttribute("offset"))] = arr;
-			var par = inp.getAttribute("semantic");
-			t["s_"+par] = (par == "VERTEX") ?
-							mesh.getElementsByTagName("vertices")[0].getElementsByTagName("input")[0].getAttribute("source").substring(1)
-							: inp.getAttribute("source").substring(1);
-
-			t["i_"+par] = arr;
-			var psrc = sources[t["s_"+par]];
+	getArray: function(type){
+		var a = [];
+		for(var i = 0, max = this.list.length; i < max; i+=1){
+			a = a.concat(this.list[i][type]);
 		}
-		var indices = tnode.getElementsByTagName("p")[0].textContent.split(" ");
-		var inum = 3*Math.floor(indices.length/3);
-		for(var j=0; j<inum; j++) inds[j%inputs.length].push(parseInt(indices[j]));
+		return a;
+	},
 
-		/*
-		if(t.s_VERTEX  ) t.u_VERTEX   = K3D.edit.unwrap(t.i_VERTEX  , sources[t.s_VERTEX  ], 3);
-		if(t.s_TEXCOORD) t.u_TEXCOORD = K3D.edit.unwrap(t.i_TEXCOORD, sources[t.s_TEXCOORD], 2);
-		if(t.s_NORMAL  ) t.u_NORMAL   = K3D.edit.unwrap(t.i_NORMAL  , sources[t.s_NORMAL  ], 3);
-		//*/
-		//if(t.s_TEXCOORD) for(var j=1; j<t.u_TEXCOORD.length; j+=2) t.u_TEXCOORD[j] = 1 - t.u_TEXCOORD[j];
-
-		/*
-		t.u_INDEX = new Array(t.i_VERTEX.length);
-		for(var j=0; j<t.i_VERTEX.length; j++) t.u_INDEX[j] = j;
-		*/
-
-		res.triangles.push(t);
-	}
-	return res;
-}
-
-K3D.parse.fromCollada._libImages = function(xml)
-{
-	xml = xml.getElementsByTagName("image");
-	var res = {};
-	for(var i=0; i<xml.length; i++)
-	{
-		res[xml[i].getAttribute("id")] = xml[i].getElementsByTagName("init_from")[0].textContent;
-	}
-	return res;
-}
-
-K3D.parse.fromCollada._libMaterials = function(xml)
-{
-	xml = xml.getElementsByTagName("material");
-	var res = {};
-	for(var i=0; i<xml.length; i++)
-	{
-		res[xml[i].getAttribute("name")] = xml[i].getElementsByTagName("instance_effect")[0].getAttribute("url").substring(1);
-	}
-	return res;
-}
-
-K3D.parse.fromCollada._libEffects = function(xml)
-{
-	xml = xml.getElementsByTagName("effect");
-	var res = {};
-	for(var i=0; i<xml.length; i++)
-	{
-		var eff = {};
-		var params = xml[i].getElementsByTagName("newparam");
-		for(var j=0; j<params.length; j++)
-		{
-			var srf = params[j].getElementsByTagName("surface")[0];
-			if(srf) eff.surface = srf.getElementsByTagName("init_from")[0].textContent;
+	get: function(idx){
+		if ((typeof idx == 'number') && idx >= 0 && idx < this.list.length){
+			return this.list[idx];
 		}
-		res[xml[i].getAttribute("id")] = eff;
-	}
-	return res;
-}
-
-
-
-
-
-K3D.parse.from3DS = function(buff)
-{
-	buff = new Uint8Array(buff);
-	var res = {};
-	if(K3D.bin.rsl(buff, 0) != 0x4d4d) return null;
-	var lim = K3D.bin.ril(buff, 2);
-
-	var off = 6;
-	while(off < lim)
-	{
-		var cid = K3D.bin.rsl(buff, off);
-		var lng = K3D.bin.ril(buff, off+2);
-		//console.log(cid.toString(16), lng);
-
-		if(cid == 0x3d3d) res.edit = K3D.parse.from3DS._edit3ds(buff, off, lng);
-		if(cid == 0xb000) res.keyf = K3D.parse.from3DS._keyf3ds(buff, off, lng);
-
-		off += lng;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._edit3ds = function(buff, coff, clng)	// buffer, chunk offset, length
-{
-	var res = {};
-	var off = coff+6;
-	while(off < coff+clng)
-	{
-		var cid = K3D.bin.rsl(buff, off);
-		var lng = K3D.bin.ril(buff, off+2);
-		//console.log("\t", cid.toString(16), lng);
-
-		if(cid == 0x4000) { if(res.objects==null) res.objects = []; res.objects.push(K3D.parse.from3DS._edit_object(buff, off, lng)); }
-		//if(cid == 0xb000) res.KEYF3DS = K3D.parse.from3DS._keyf3ds(buff, off, lng);
-
-		off += lng;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._keyf3ds = function(buff, coff, clng)
-{
-	var res = {};
-	var off = coff+6;
-	while(off < coff+clng)
-	{
-		var cid = K3D.bin.rsl(buff, off);
-		var lng = K3D.bin.ril(buff, off+2);
-		//console.log("\t\t", cid.toString(16), lng);
-
-		//if(cid == 0x4000) { res.objects.push(K3D.parse.from3DS._edit_object(buff, off, lng)); }
-		if(cid == 0xb002) { if(res.desc==null) res.desc = []; res.desc.push(K3D.parse.from3DS._keyf_objdes(buff, off, lng)); }
-
-		off += lng;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._keyf_objdes = function(buff, coff, clng)
-{
-	var res = {};
-	var off = coff+6;
-	while(off < coff+clng)
-	{
-		var cid = K3D.bin.rsl(buff, off);
-		var lng = K3D.bin.ril(buff, off+2);
-		//console.log("\t\t\t", cid.toString(16), lng);
-
-		if(cid == 0xb010) res.hierarchy = K3D.parse.from3DS._keyf_objhierarch(buff, off, lng);
-		if(cid == 0xb011) res.dummy_name = K3D.bin.rASCII0(buff, off+6);
-		off += lng;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._keyf_objhierarch = function(buff, coff, clng)
-{
-	var res = {};
-	var off = coff+6;
-	res.name = K3D.bin.rASCII0(buff, off);  off += res.name.length+1;
-	res.hierarchy = K3D.bin.rsl(buff, off+4);
-	return res;
-}
-
-K3D.parse.from3DS._edit_object = function(buff, coff, clng)	// buffer, chunk offset, length
-{
-	var res = {};
-	var off = coff+6;
-	res.name = K3D.bin.rASCII0(buff, off);  off += res.name.length+1;
-	//console.log(res.name);
-	while(off < coff+clng)
-	{
-		var cid = K3D.bin.rsl(buff, off);
-		var lng = K3D.bin.ril(buff, off+2);
-		//console.log("\t\t", cid.toString(16), lng);
-
-		if(cid == 0x4100) res.mesh = K3D.parse.from3DS._obj_trimesh(buff, off, lng);
-		//if(cid == 0xb000) res.KEYF3DS = K3D.parse.from3DS._keyf3ds(buff, off, lng);
-
-		off += lng;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._obj_trimesh = function(buff, coff, clng)	// buffer, chunk offset, length
-{
-	var res = {};
-	var off = coff+6;
-
-	while(off < coff+clng)
-	{
-		var cid = K3D.bin.rsl(buff, off);
-		var lng = K3D.bin.ril(buff, off+2);
-		//console.log("\t\t\t", cid.toString(16), lng);
-
-		if(cid == 0x4110) res.vertices      = K3D.parse.from3DS._tri_vertexl     (buff, off, lng);
-		if(cid == 0x4120) res.indices       = K3D.parse.from3DS._tri_facel1      (buff, off, lng);
-		if(cid == 0x4140) res.uvt			= K3D.parse.from3DS._tri_mappingcoors(buff, off, lng);
-		if(cid == 0x4160) res.local		    = K3D.parse.from3DS._tri_local       (buff, off, lng);
-		off += lng;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._tri_vertexl = function(buff, coff, clng)	// buffer, chunk offset, length
-{
-	var res = [];
-	var off = coff+6;
-	var n = K3D.bin.rsl(buff, off);  off += 2;
-	for(var i=0; i<n; i++)
-	{
-		res.push(K3D.bin.rf(buff, off  ));	res.push(K3D.bin.rf(buff, off+4));	res.push(K3D.bin.rf(buff, off+8));
-		off += 12;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._tri_facel1 = function(buff, coff, clng)	// buffer, chunk offset, length
-{
-	var res = [];
-	var off = coff+6;
-	var n = K3D.bin.rsl(buff, off);  off += 2;
-	for(var i=0; i<n; i++)
-	{
-		res.push(K3D.bin.rsl(buff, off  ));
-		res.push(K3D.bin.rsl(buff, off+2));
-		res.push(K3D.bin.rsl(buff, off+4));
-		off += 8;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._tri_mappingcoors = function(buff, coff, clng)	// buffer, chunk offset, length
-{
-	var res = [];
-	var off = coff+6;
-	var n = K3D.bin.rsl(buff, off);  off += 2;
-	for(var i=0; i<n; i++)
-	{
-		res.push(  K3D.bin.rf(buff, off  ));
-		res.push(1-K3D.bin.rf(buff, off+4));
-		off += 8;
-	}
-	return res;
-}
-
-K3D.parse.from3DS._tri_local = function(buff, coff, clng)	// buffer, chunk offset, length
-{
-	var res = {};
-	var off = coff+6;
-	res.X = [K3D.bin.rf(buff, off), K3D.bin.rf(buff, off+4), K3D.bin.rf(buff, off+8)];  off += 12;
-	res.Y = [K3D.bin.rf(buff, off), K3D.bin.rf(buff, off+4), K3D.bin.rf(buff, off+8)];  off += 12;
-	res.Z = [K3D.bin.rf(buff, off), K3D.bin.rf(buff, off+4), K3D.bin.rf(buff, off+8)];  off += 12;
-	res.C = [K3D.bin.rf(buff, off), K3D.bin.rf(buff, off+4), K3D.bin.rf(buff, off+8)];  off += 12;
-	return res;
-}
-
-K3D.parse.fromBIV = function(buff)
-{
-	buff = new Uint8Array(buff);
-	var res = {};
-
-	var head = {};
-
-	head.id		= K3D.bin.ril(buff,  0);
-
-	head.verS	= K3D.bin.ril(buff,  4);
-	head.texS	= K3D.bin.ril(buff,  8);
-	head.indS	= K3D.bin.ril(buff, 12);
-
-	head.verO	= K3D.bin.ril(buff, 16);
-	head.verL	= K3D.bin.ril(buff, 20);
-	head.texO	= K3D.bin.ril(buff, 24);
-	head.texL	= K3D.bin.ril(buff, 28);
-	head.indO	= K3D.bin.ril(buff, 32);
-	head.indL	= K3D.bin.ril(buff, 36);
-
-	if(head.verO != 0) res.vertices = K3D.parse.fromBIV._readFloats(buff, head.verO, head.verL);
-	if(head.texO != 0) res.uvt      = K3D.parse.fromBIV._readFloats(buff, head.texO, head.texL);
-	if(head.indO != 0) res.indices  = K3D.parse.fromBIV._readInts  (buff, head.indO, head.indL, head.indS);
-
-	return res;
-}
-
-K3D.parse.toBIV = function(obj)
-{
-	var maxi = 0;
-	for(var i=0; i<obj.indices.length; i++)	maxi = Math.max(maxi, obj.indices[i]);
-
-	var indS = 32;
-	if(maxi<=0xffff) indS = 16;
-
-	var len = 40;
-	if(obj.vertices) len+=obj.vertices.length*4;
-	if(obj.uvt     ) len+=obj.uvt     .length*4;
-	if(obj.indices ) len+=obj.indices .length*indS/8;
-
-
-	var buff = new Uint8Array(len);
-
-	K3D.bin.wil(buff,  0, 0x6976616e);
-
-	K3D.bin.wil(buff,  4, 32);
-	K3D.bin.wil(buff,  8, 32);
-	K3D.bin.wil(buff, 12, indS);
-
-	var off = 40;
-	if(obj.vertices)
-	{
-		K3D.bin.wil(buff, 16, off);
-		K3D.bin.wil(buff, 20, 4*obj.vertices.length);
-		K3D.parse.fromBIV._writeFloats(buff, off, obj.vertices);
-		off += 4*obj.vertices.length;
-	}
-	if(obj.uvt)
-	{
-		K3D.bin.wil(buff, 24, off);
-		K3D.bin.wil(buff, 28, 4*obj.uvt.length);
-		K3D.parse.fromBIV._writeFloats(buff, off, obj.uvt);
-		off += 4*obj.uvt.length;
-	}
-	if(obj.indices)
-	{
-		K3D.bin.wil(buff, 32, off);
-		K3D.bin.wil(buff, 36, 4*obj.indices.length);
-		K3D.parse.fromBIV._writeInts  (buff, off, obj.indices, indS);
-	}
-	return buff.buffer;
-}
-
-K3D.parse.fromBIV._readFloats = function(buff, off, len)
-{
-	var arr = [];
-	for(var i=0; i<len/4; i++) arr.push( K3D.bin.rf(buff, off+4*i));
-	return arr;
-}
-
-K3D.parse.fromBIV._writeFloats = function(buff, off, arr)
-{
-	for(var i=0; i<arr.length; i++) K3D.bin.wf(buff, off+4*i, arr[i]);
-}
-
-K3D.parse.fromBIV._readInts   = function(buff, off, len, cs)
-{
-	var arr = [];
-	for(var i=0; i<len/4; i++)
-	{
-		if(cs==16) arr.push( K3D.bin.rsl(buff, off+2*i));
-		if(cs==32) arr.push( K3D.bin.ril(buff, off+4*i));
-	}
-	return arr;
-}
-
-K3D.parse.fromBIV._writeInts   = function(buff, off, arr, cs)
-{
-	for(var i=0; i<arr.length; i++)
-	{
-		if(cs==16) K3D.bin.wsl(buff, off+2*i, arr[i]);
-		if(cs==32) K3D.bin.wil(buff, off+4*i, arr[i]);
-	}
-}
-K3D.gen = {};
-
-K3D.gen.Plane = function(sw, sh, tsw, tsh)
-{
-	if(!tsw) tsw = 1;
-	if(!tsh) tsh = 1;
-	var r = {verts:[], inds:[], uvt:[]};
-	var ssw = sw+1, ssh = sh+1
-	for(var i=0; i<ssh; i++)
-	{
-		for(var j=0; j<ssw; j++)
-		{
-			var x = -1 + j*(2/sw);
-			var y = -1 + i*(2/sh);
-			r.verts.push(x, y, 0);
-			r.uvt.push(tsw*j/sw, tsh*i/sh);
-			if(i<sh && j<sw)
-				r.inds.push(i*ssw+j, i*ssw+j+1, (i+1)*ssw+j,   i*ssw+j+1, (i+1)*ssw+j, (i+1)*ssw+j+1);
+		else if (typeof idx == 'string'){
+			for(var i=0, max = this.list.length; i < max; i+=1){
+				if (this.list[i].id == idx) return this.list[i];
+			}
+			throw 'Light ' + idx + ' does not exist';
 		}
-	}
-	return r;
-}
-K3D.gen.Cube = function()
-{
-	var r = {
-		verts:[	-1, 1,-1,   1, 1,-1,  -1,-1,-1,   1,-1,-1, // front
-				-1, 1, 1,   1, 1, 1,  -1,-1, 1,   1,-1, 1, // back
-
-				-1, 1, 1,  -1, 1,-1,  -1,-1, 1,  -1,-1,-1, // left
-				 1, 1, 1,   1, 1,-1,   1,-1, 1,   1,-1,-1, // right
-
-				-1, 1,-1,   1, 1,-1,  -1, 1, 1,   1, 1, 1, // top
-				-1,-1,-1,   1,-1,-1,  -1,-1, 1,   1,-1, 1  // bottom
-		],
-		inds:[	0,1,2, 1,2,3, 4,5,6, 5,6,7,
-				8,9,10, 9,10,11, 12,13,14, 13,14,15,
-				16,17,18, 17,18,19, 20,21,22, 21,22,23
-		],
-		uvt:[
-				1/4,1/4,  2/4,1/4,  1/4,2/4,  2/4,2/4, // front
-				4/4,1/4,  3/4,1/4,  4/4,2/4,  3/4,2/4, // back
-
-				0/4,1/4,  1/4,1/4,  0/4,2/4,  1/4,2/4, // left
-				3/4,1/4,  2/4,1/4,  3/4,2/4,  2/4,2/4, // right
-
-				1/4,1/4,  2/4,1/4,  1/4,0/4,  2/4,0/4, // top
-				1/4,2/4,  2/4,2/4,  1/4,3/4,  2/4,3/4, // bottom
-		]
-	};
-	return r;
-}
-K3D.gen.Sphere = function(sx, sy)
-{
-	var r = {verts:[], inds:[], uvt:[]};
-
-	var dx = 2*Math.PI/sx;
-	var dy = Math.PI/sy;
-	var nx = sx+1, ny = sy+1;
-	for(var i=0; i<ny; i++)	// rows
-	{
-		for(var j=0; j<nx; j++) // cols
-		{
-			var lat = -Math.PI/2 + i*Math.PI/sy;
-			var lon =  j*2*Math.PI/sx;
-			var x = Math.cos(lat) * Math.cos(lon);
-			var y = Math.sin(lat);
-			var z = Math.cos(lat) * Math.sin(lon);
-
-			r.verts.push(x,y,z);
-			r.uvt.push(j/sx, i/sy);
-			if(i<sy && j<sx)          // 6 indices for 2 triangles
-				r.inds.push(nx*i+j, nx*i+j+1, nx*(i+1)+j, nx*i+j+1, nx*(i+1)+j, nx*(i+1)+j+1);
+		else {
+			throw 'Unknown parameter';
 		}
-	}
-	return r;
-}
-K3D.mat = {};
+	},
 
-K3D.mat.scale = function(x,y,z)
-{
-	return [
-		x,0,0,0,
-		0,y,0,0,
-		0,0,z,0,
-		0,0,0,1
-	];
-}
-
-K3D.mat.translate = function(x,y,z)
-{
-	return [
-		1,0,0,0,
-		0,1,0,0,
-		0,0,1,0,
-		x,y,z,1
-	];
-}
-
-K3D.mat.rotateDeg = function(x,y,z)
-{
-	var r = Math.PI/180;
-	return K3D.mat.rotate(x*r, y*r, z*r);
-}
-
-K3D.mat.rotate = function(x,y,z)
-{
-	var m = [
-		1,0,0,0,
-		0,1,0,0,
-		0,0,1,0,
-		0,0,0,1
-	];
-	var a =  x;	// alpha
-	var b =  y;	// beta
-	var g =  z;	// gama
-
-	var ca = Math.cos(a), cb = Math.cos(b), cg = Math.cos(g);
-	var sa = Math.sin(a), sb = Math.sin(b), sg = Math.sin(g);
-
-	m[0] = cb*cg;				m[1] = -cb*sg;					m[2 ] = sb;
-	m[4] = (ca*sg+sa*sb*cg);	m[5] = (ca*cg-sa*sb*sg);		m[6 ] = -sa*cb;
-	m[8] = (sa*sg-ca*sb*cg);	m[9] = (sa*cg+ca*sb*sg);		m[10] = ca*cb;
-
-	return m;
-}
-
-
-K3D.edit = {};
-
-K3D.edit.interpolate = function(a, b, d, t)
-{
-	for(var i=0; i<a.length; i++) d[i] = a[i] + t*(b[i] - a[i]);
-}
-
-
-K3D.edit.transform = function(a, m)
-{
-	for(var i=0; i<a.length; i+=3)
-	{
-		var x = a[i], y = a[i+1], z = a[i+2];
-		a[i+0] = m[0]*x + m[4]*y + m[8 ]*z + m[12];
-		a[i+1] = m[1]*x + m[5]*y + m[9 ]*z + m[13];
-		a[i+2] = m[2]*x + m[6]*y + m[10]*z + m[14];
+	setNumLights: function() {
+		if (this.list.length <= 0) return 4
+		else return this.list.length
 	}
 }
 
-// starting indices, starting coordinates, coordinates per index
+var Shaders = {
+     "vertex" : {
+      'type' : "x-shader/x-vertex",
+       'content' : "const int NUM_LIGHTS =" + Lights.setNumLights() + ";\n"
 
-K3D.edit.unwrap = function(ind, crd, cpi)
-{
-	var ncrd = new Array(Math.floor(ind.length/3)*cpi);
-	for(var i=0; i<ind.length; i++)
-	{
-		for(var j=0; j<cpi; j++)
-		{
-			ncrd[i*cpi+j] = crd[ind[i]*cpi+j];
-		}
-	}
-	return ncrd;
-}
+        + "   attribute vec3 aVertexPosition;\n"
+        + "   attribute vec3 aVertexNormal;\n"
+        + "   attribute vec4 aVertexColor;\n"
 
-// current indices, new indices, current array, coordinates per vertex
+        + "   uniform mat4 uMVMatrix;\n"
+        + "   uniform mat4 uPMatrix;\n"
+        + "   uniform mat4 uNMatrix;\n"
 
-K3D.edit.remap = function(ind, nind, arr, cpi)
-{
-	var ncrd = new Array(arr.length);
-	for(var i=0; i<ind.length; i++)
-	{
-		for(var j=0; j<cpi; j++)
-		{
-			ncrd[nind[i]*cpi+j] = arr[ind[i]*cpi+j];
-		}
-	}
-	return ncrd;
-}
+        + "   uniform bool uTranslateLights;\n"
+        + "   uniform vec3 uLightPosition[NUM_LIGHTS];\n"
 
+        + "   varying vec3 vNormal;\n"
+        + "   varying vec3 vLightRay[NUM_LIGHTS];\n"
+        + "   varying vec3 vEye[NUM_LIGHTS];\n"
 
+        + "   void main(void) {\n"
 
+        + "        vec4 c = aVertexColor;\n"
+        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n"
+        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n"
+        + "        vec4 lightPosition = vec4(0.0);\n"
 
-K3D.utils = {};
+        + "        if (uTranslateLights){ "
+        + "            for(int i=0; i < NUM_LIGHTS; i++){ "
+        + "              lightPosition =   uMVMatrix * vec4(uLightPosition[i], 1.0);\n"
+        + "              vLightRay[i] = vertex.xyz - lightPosition.xyz;\n"
+        + "              vEye[i] = -vec3(vertex.xyz);\n"
+        + "            }\n"
+        + "        }\n"
+        + "        else {\n"
+        + "           for(int i=0; i < NUM_LIGHTS; i++){\n"
+        + "             lightPosition = vec4(uLightPosition[i], 1.0);\n"
+        + "             vLightRay[i] = vertex.xyz - lightPosition.xyz;\n"
+        + "             vEye[i] = -vec3(vertex.xyz);\n"
+        + "           }\n"
+        + "       }\n"
+        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n"
+        + "   }\n"
+  },
 
-K3D.utils.getAABB = function(vts)
-{
-	var minx, miny, minz, maxx, maxy, maxz;
-	minx = miny = minz = 999999999;
-	maxx = maxy = maxz = -minx;
+  "fragment" : {
+    'type' : "x-shader/x-fragment",
+    'content' : "#ifdef GL_ES\n"
+  + "precision highp float;\n"
+  + "#endif\n"
 
-	for(var i=0; i<vts.length; i+=3)
-	{
-		var vx = vts[i+0];
-		var vy = vts[i+1];
-		var vz = vts[i+2];
-		if(vx<minx) minx = vx;  if(vx>maxx) maxx = vx;
-		if(vy<miny) miny = vy;  if(vy>maxy) maxy = vy;
-		if(vz<minz) minz = vz;  if(vy>maxz) maxz = vz;
-	}
-	return {min:{x:minx, y:miny, z:minz}, max:{x:maxx, y:maxy, z:maxz}};
-}
+  //Light uniforms
+  + "  const int NUM_LIGHTS =" + Lights.setNumLights() + ";\n"
+  + "  uniform vec3  uLa[NUM_LIGHTS];\n"   //ambient
+  + "  uniform vec3  uLd[NUM_LIGHTS];\n"   //diffuse
+  + "  uniform vec3  uLs[NUM_LIGHTS];\n"   //specular
+  + "  uniform vec3  uLightPosition[NUM_LIGHTS];\n"
 
-'use strict';
+   //Material uniforms
+  + "  uniform vec3  uKa;\n"   //ambient
+  + "  uniform vec3  uKd;\n"   //diffuse
+  + "  uniform vec3  uKs;\n"   //specular
+  + "  uniform float uNs;\n"   //specular coefficient
+  + "  uniform float d;\n"    //Opacity
+  + "  uniform int   illum;\n" //Illumination mode
 
-function Entity(elements, files) {
-    this.elements = elements || [];
-    this.files    = files    || [];
+  + "  uniform bool  uWireframe;\n"
+
+  + "  varying vec3 vNormal;\n"
+  + "  varying vec3 vLightRay[NUM_LIGHTS];\n"
+  + "  varying vec3 vEye[NUM_LIGHTS];\n"
+
+  + "  float calculateAttenuation(in vec3 ray){\n"
+  + "      float dist = length(ray);\n"
+  + "      return (1.0 / (0.1 * dist));\n"
+  + "  }\n"
+
+  + "  void main(void) {\n"
+  + "      if (uWireframe || illum == 0){\n"
+  + "          gl_FragColor = vec4(uKd,d);\n"
+  + "          return;\n"
+  + "      }\n"
+
+  + "     vec3 COLOR = vec3(0.0,0.0,0.0);\n"
+  + "     vec3 N =  normalize(vNormal);\n"
+  + "     vec3 L =  vec3(0.0,0.0,0.0);\n"
+  + "     vec3 E =  vec3(0.0,0.0,0.0);\n"
+  + "     vec3 R =  vec3(0.0,0.0,0.0);\n"
+  + "     vec3 deltaRay = vec3(0.0);\n"
+  + "     const int  lsize = 2;\n"
+  + "     const float step = 0.25;\n"
+  + "     const float inv_total = 1.0/((float(lsize*lsize) + 1.0)*(float(lsize*lsize) + 1.0));\n"  //how many deltaRays
+
+  + "     float dx = 0.0;\n"
+  + "     float dz = 0.0;\n"
+  + "     float LT = 0.0;\n"
+
+  + "     if (illum == 1){\n"
+  + "          for(int i = 0; i < NUM_LIGHTS; i++){\n"
+  + "              L = normalize(vLightRay[i]);\n"
+  + "              N = normalize(vNormal);\n"
+  + "              COLOR += (uLa[i] * uKa) + (uLd[i] * uKd * clamp(dot(N, -L),0.0,1.0));\n"
+  + "          }\n"
+  + "          gl_FragColor =  vec4(COLOR,d);\n"
+  + "          return;\n"
+  + "     }\n"
+
+  + "     if (illum == 2){\n"
+  + "          for(int i = 0; i < NUM_LIGHTS; i++){\n"
+
+  + "              E = normalize(vEye[i]);\n"
+  + "              L = normalize(vLightRay[i]);\n"
+  + "              R = reflect(L, N);\n"
+  + "              COLOR += (uLa[i] * uKa);\n"
+  + "              COLOR += (uLd[i] * uKd * clamp(dot(N,-L),0.0,1.0));\n"// * calculateAttenuation(vLightRay[i]));
+  + "              COLOR += (uLs[i] * uKs * pow( max(dot(R, E), 0.0), uNs) * 4.0);\n"
+  + "          }\n"
+  + "          gl_FragColor =  vec4(COLOR,d);\n"
+  + "          return;\n"
+  + "     }\n"
+  + "  }\n"
   }
+}
 
-Entity.prototype.beginDraw = function(children) {
-  children.forEach(function(child) {
-    child.draw();
-  })
+var Program = {
+  //init Program
+  attributeList : ["aVertexPosition", "aVertexNormal", "aVertexColor"],
+  uniformList   : [	"uPMatrix", "uMVMatrix", "uNMatrix", "uLightPosition", "uWireframe",
+                    "uLa", "uLd", "uLs", "uKa", "uKd", "uKs", "uNs", "d", "illum", "uTranslateLights"
+                  ],
+
+    getShader : function(gl, id) {
+        var str  = Shaders[id]['content'];
+        var type = Shaders[id]['type'];
+
+        var shader, message;
+        if (type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+            message = 'Fragment Shader';
+        } else if (type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+            message = 'Vertex Shader';
+        } else {
+            return null;
+        }
+
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert('There was a problem with the ' + message +':\n\n'+ gl.getShaderInfoLog(shader));
+            return null;
+        }
+        return shader;
+    },
+
+    load : function() {
+     var fragmentShader          = Program.getShader(gl, "fragment");
+     var vertexShader            = Program.getShader(gl, "vertex");
+
+     prg = gl.createProgram();
+     gl.attachShader(prg, vertexShader);
+     gl.attachShader(prg, fragmentShader);
+
+     //taken from https://developer.mozilla.org/en-US/docs/Web/WebGL/WebGL_best_practices (!)
+     gl.bindAttribLocation(prg, 0 , "aVertexPosition");
+     gl.linkProgram(prg);
+
+     if (!gl.getProgramParameter(prg, gl.LINK_STATUS)) {
+      alert("Could not initialise shaders");
+     }
+
+     gl.useProgram(prg);
+     gl.enableVertexAttribArray(0);
+
+  	 this.setAttributeLocations(this.attributeList);
+  	 this.setUniformLocations(this.uniformList);
+    },
+
+	setAttributeLocations: function (attrList){
+
+		for(var i=0, max = attrList.length; i <max; i+=1){
+			this[attrList[i]] = gl.getAttribLocation(prg, attrList[i]);
+		}
+
+	},
+
+	setUniformLocations: function (uniformList){
+
+		for(var i=0, max = uniformList.length; i < max; i +=1){
+			this[uniformList[i]] = gl.getUniformLocation(prg, uniformList[i]);
+		}
+	},
+
+    getUniform: function (uniformLocation){
+        return gl.getUniform(prg, uniformLocation);
+    }
 };
 
-Entity.prototype.endDraw   = function() {};
+'use strict'
 
-'use strict';
+function Mesh(filename, alias) {
+  this.filename = filename;
+  this.alias   = alias;
+  this.ambient = null;
+  this.diffuse = null;
+  this.specular = null;
+  this.wireframe = null;
+  this.vertices = null;
+  this.indices = null;
+  this.scalars = null;
+  this.textureCoords = null;
+  this.texture = null;
+  this.image = null;
+  this.tbo = null;
+  this.cbo = null;
+  this.nbo = null;
+  this.ibo = null;
+  this.vbo = null;
+  this.remote = null;
+  this.Ni = null;
+  this.Ka = null;
+  this.d = null;
+  this.Kd = null;
+  this.illum = null;
+  this.Ks = null;
+  this.Ns = null;
+}
 
-function Tree(root) {
-    this.root            = root;
-    this.entityMatrix    = [];
-  }
+Mesh.prototype.getAlias = function() {
+  return this.alias;
+};
 
-  Tree.prototype = {
-    getRoot : function() {
-      return this.root;
+Mesh.prototype.getFilename = function() {
+  return this.filename;
+};
+
+Mesh.prototype.draw = function() {
+  console.log('mesh faking drawing');
+};
+
+var Scene = {
+    objects : [],
+
+    getObject : function(alias){
+        for(var i=0, max = Scene.objects.length; i < max; i++){
+            if (alias == Scene.objects[i].alias) return Scene.objects[i];
+        }
+        return null;
     },
 
-    preorder  : function(node, doSomething) {
-        if (node == null) return;
-        doSomething(node);
-        this.preorder(node.firstChild(), doSomething);
-        this.preorder(node.nextSibling(), doSomething);
+    loadObject : function(filename,alias,attributes,callback) {
+        var request = new XMLHttpRequest();
+        console.info('Requesting ' + filename);
+        request.open("GET",filename);
+
+        request.onreadystatechange = function() {
+            if (request.readyState == 4) {
+                if(request.status == 404) {
+                    console.info(filename + ' does not exist');
+                }
+                else {
+                    var o = JSON.parse(request.responseText);
+                    o.alias = (alias==null)?'none':alias;
+                    o.remote = true;
+                    Scene.addObject(o,attributes,callback);
+                }
+            }
+        }
+        request.send();
     },
 
-    pushEntity : function(entity) {
-      this.entityMatrix.push(entity);
+    loadObjectByParts: function(path, alias, parts){
+        for(var i = 1;i <= parts; i++){
+            var partFilename =  path+''+i+'.json';
+            var partAlias = alias+''+i;
+            Scene.loadObject(partFilename,partAlias);
+        }
     },
 
-    popEntity : function() {
-      this.entityMatrix.pop();
+    addObject : function(object, attributes, callback) {
+
+        //deffault object light
+        if (object.wireframe        === undefined)    {   object.wireframe        = false;            }
+        if (object.diffuse          === undefined)    {   object.diffuse          = [1.0,1.0,1.0,1.0];}
+        if (object.ambient          === undefined)    {   object.ambient          = [0.2,0.2,0.2,1.0];}
+        if (object.specular         === undefined)    {   object.specular         = [1.0,1.0,1.0,1.0];}
+
+        //set attributes
+       for(var key in attributes){
+			     object[key] = attributes[key];
+        }
+
+        var vertexBufferObject = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferObject);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.vertices), gl.STATIC_DRAW);
+
+        var normalBufferObject = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBufferObject);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateNormals(object.vertices, object.indices)), gl.STATIC_DRAW);
+
+       var colorBufferObject;
+       if (object.scalars){
+            colorBufferObject = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBufferObject);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.scalars), gl.STATIC_DRAW);
+            object.cbo = colorBufferObject;
+        }
+
+		var textureBufferObject, tangentBufferObject;
+		if (object.texture_coords){
+			console.info('the object '+object.name+' has texture coordinates');
+			textureBufferObject = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
+			object.tbo = textureBufferObject;
+
+            tangentBufferObject = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, tangentBufferObject);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateTangents(object.vertices, object.texture_coords, object.indices)), gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER,null);
+            object.tanbo = tangentBufferObject;
+		}
+
+        if (object.image){
+            object.texture = new Texture(object.image);
+        }
+
+        var indexBufferObject = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferObject);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(object.indices), gl.STATIC_DRAW);
+
+        object.vbo = vertexBufferObject;
+        object.ibo = indexBufferObject;
+        object.nbo = normalBufferObject;
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        gl.bindBuffer(gl.ARRAY_BUFFER,null);
+
+        Scene.objects.push(object);
+
+        if (object.remote){
+            console.info(object.alias + ' has been added to the scene [Remote]');
+         }
+         else {
+            console.info(object.alias + ' has been added to the scene [Local]');
+         }
+
+		 if (callback != undefined){
+			callback(object);
+		 }
+
+     console.log(this.objects);
     },
 
-    inorder   : function() {
-      /* TODO */
-    },
 
-    postorder : function() {
-      /* TODO */
+	removeObject: function(objectName){
+		var o = this.getObject(objectName);
+		var idx = this.objects.indexOf(o);
+		this.objects.splice(idx,1);
+	},
+
+	renderFirst: function(objectName){
+		var o = this.getObject(objectName);
+		var idx = this.objects.indexOf(o);
+		if (idx == 0) return;
+		this.objects.splice(idx, 1);
+		this.objects.splice(0,0,o);
+		console.info('render order:' + this.renderOrder());
+	},
+
+	renderLast: function(objectName){
+		var o = this.getObject(objectName);
+		var idx = this.objects.indexOf(o);
+		if (idx == 0) return;
+		this.objects.splice(idx, 1);
+		this.objects.push(o);
+		console.info('render order:' + this.renderOrder());
+	},
+
+	renderSooner : function(objectName){
+		var o = this.getObject(objectName);
+		var idx = this.objects.indexOf(o);
+		if (idx == 0) return; //can't bring it forward further than to the first place
+		this.objects.splice(idx,1);
+		this.objects.splice(idx-1,0,o);
+		console.info('render order:' + this.renderOrder());
+	},
+
+	renderLater: function(objectName){
+		var o = this.getObject(objectName);
+		var idx = this.objects.indexOf(o);
+		if (idx == this.objects.length-1) return; //can't send it back further than to the last place
+		this.objects.splice(idx,1);
+		this.objects.splice(idx+1,0,o);
+		console.info('render order:' + this.renderOrder());
+	},
+
+	renderOrder: function(){
+		var s = '[ ';
+		for(var i =0, max=this.objects.length; i< max; i++){
+			s += this.objects[i].alias + ' ';
+		}
+		s += ']';
+		return s;
+	}
+}
+
+var Axis = {
+    alias           : 'axis',
+    dim             : 10,
+    vertices        : [-10,0.0,0.0, 10,0.0,0.0, 0.0,-10/2,0.0,
+                        0.0,10/2,0.0, 0.0,0.0,-10, 0.0,0.0,10],
+    indices         : [0,1,2,3,4,5],
+    colors          : [1,1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1],
+    wireframe       : true,
+    perVertexColor  : true,
+    build           : function(d){
+                        if (d) Axis.dim = d;
+                        Axis.vertices = [-d,0.0,0.0, d,0.0,0.0, 0.0,-d/2,0.0,
+                                        0.0,d/2,0.0, 0.0,0.0,-d, 0.0,0.0,d];
+                      }
+}
+
+var Floor = {
+    alias       : 'floor',
+    wireframe   : true,
+    dim         : 50,
+    lines       : 50,
+    vertices    : [],
+    indices     : [],
+    diffuse : [0.7,0.7,0.7,1.0],
+    build : function(d,e){
+                    if (d) Floor.dim = d;
+                    if (e) Floor.lines = 2*Floor.dim/e;
+                    var inc = 2*Floor.dim/Floor.lines;
+                    var v = [];
+                    var i = [];
+
+                    for(var l=0;l<=Floor.lines;l++){
+                        v[6*l] = -Floor.dim; 
+                        v[6*l+1] = 0;
+                        v[6*l+2] = -Floor.dim+(l*inc);
+                        
+                        v[6*l+3] = Floor.dim;
+                        v[6*l+4] = 0;
+                        v[6*l+5] = -Floor.dim+(l*inc);
+                        
+                        v[6*(Floor.lines+1)+6*l] = -Floor.dim+(l*inc); 
+                        v[6*(Floor.lines+1)+6*l+1] = 0;
+                        v[6*(Floor.lines+1)+6*l+2] = -Floor.dim;
+                        
+                        v[6*(Floor.lines+1)+6*l+3] = -Floor.dim+(l*inc);
+                        v[6*(Floor.lines+1)+6*l+4] = 0;
+                        v[6*(Floor.lines+1)+6*l+5] = Floor.dim;
+                        
+                        i[2*l] = 2*l;
+                        i[2*l+1] = 2*l+1;
+                        i[2*(Floor.lines+1)+2*l] = 2*(Floor.lines+1)+2*l;
+                        i[2*(Floor.lines+1)+2*l+1] = 2*(Floor.lines+1)+2*l+1;        
+                    }
+                    Floor.vertices = v;
+                    Floor.indices = i;
+              }
+}
+
+
+
+
+
+var CAMERA_ORBITING_TYPE = 1;
+var CAMERA_TRACKING_TYPE = 2;
+
+function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
+
+    //default parameters
+    this.alias      = alias;
+    this.matrix     = mat4.create();
+    this.up         = vec3.create();
+    this.right      = vec3.create();
+    this.normal     = vec3.create();
+    this.position   = vec3.create();
+    this.focus      = vec3.create();
+    this.azimuth    = 0.0;
+    this.elevation  = 0.0;
+    this.type       = t;
+    this.steps      = 0;
+    this.home       = vec3.create();
+
+    //update in drawing
+    this.tHome      = tHome;
+    this.tFocus     = tFocus;
+    this.tAzimuth   = tAzimuth;
+    this.tElevation = tElevation;
+}
+
+Camera.prototype.isMain = function() {
+  return this.main;
+};
+
+Camera.prototype.setType = function(t){
+
+    this.type = t;
+
+    if (t != CAMERA_ORBITING_TYPE && t != CAMERA_TRACKING_TYPE) {
+        alert('Wrong Camera Type!. Setting Orbitting type by default');
+        this.type = CAMERA_ORBITING_TYPE;
     }
-  }
+}
+
+Camera.prototype.goHome = function(h) {
+    if (h != null){
+        this.home = h;
+    }
+
+    this.setPosition(this.home);
+    this.setAzimuth(0);
+    this.setElevation(0);
+    this.steps = 0;
+}
+
+Camera.prototype.dolly = function(s){
+    var c = this;
+
+    var p =  vec3.create();
+    var n = vec3.create();
+
+    p = c.position;
+
+    var step = s - c.steps;
+
+    vec3.normalize(c.normal,n);
+
+    var newPosition = vec3.create();
+
+    if(c.type == CAMERA_TRACKING_TYPE){
+        newPosition[0] = p[0] - step*n[0];
+        newPosition[1] = p[1] - step*n[1];
+        newPosition[2] = p[2] - step*n[2];
+    }
+    else{
+        newPosition[0] = p[0];
+        newPosition[1] = p[1];
+        newPosition[2] = p[2] - step;
+    }
+
+    c.setPosition(newPosition);
+    c.steps = s;
+}
+
+Camera.prototype.setPosition = function(p){
+    vec3.set(p, this.position);
+    this.update();
+}
+
+Camera.prototype.setFocus = function(f){
+	vec3.set(f, this.focus);
+	this.update();
+}
+
+Camera.prototype.setAzimuth = function(az){
+    this.changeAzimuth(az - this.azimuth);
+}
+
+Camera.prototype.changeAzimuth = function(az){
+    var c = this;
+    c.azimuth +=az;
+
+    if (c.azimuth > 360 || c.azimuth <-360) {
+		c.azimuth = c.azimuth % 360;
+	}
+    c.update();
+}
+
+Camera.prototype.setElevation = function(el){
+    this.changeElevation(el - this.elevation);
+}
+
+Camera.prototype.changeElevation = function(el){
+    var c = this;
+
+    c.elevation +=el;
+
+    if (c.elevation > 360 || c.elevation <-360) {
+		c.elevation = c.elevation % 360;
+	}
+    c.update();
+}
+
+Camera.prototype.calculateOrientation = function(){
+	var m = this.matrix;
+    mat4.multiplyVec4(m, [1, 0, 0, 0], this.right);
+    mat4.multiplyVec4(m, [0, 1, 0, 0], this.up);
+    mat4.multiplyVec4(m, [0, 0, 1, 0], this.normal);
+}
+
+Camera.prototype.update = function() {
+	mat4.identity(this.matrix);
+
+	this.calculateOrientation();
+
+    if (this.type == CAMERA_TRACKING_TYPE){
+        mat4.translate(this.matrix, this.position);
+        mat4.rotateY(this.matrix, this.azimuth * Math.PI/180);
+        mat4.rotateX(this.matrix, this.elevation * Math.PI/180);
+    }
+    else {
+        var trxLook = mat4.create();
+        mat4.rotateY(this.matrix, this.azimuth * Math.PI/180);
+        mat4.rotateX(this.matrix, this.elevation * Math.PI/180);
+        mat4.translate(this.matrix,this.position);
+    }
+
+    this.calculateOrientation();
+
+    if(this.type == CAMERA_TRACKING_TYPE){
+        mat4.multiplyVec4(this.matrix, [0, 0, 0, 1], this.position);
+    }
+}
+
+Camera.prototype.getViewTransform = function(){
+    var m = mat4.create();
+    mat4.inverse(this.matrix, m);
+    return m;
+};
+
+Camera.prototype.draw = function() {
+  this.goHome(this.tHome);
+  this.setFocus(this.tFocus);
+  this.setAzimuth(this.tAzimuth);
+  this.setElevation(this.tElevation);
+};
+
+var Cameras = {
+  list : [],
+  add : function(camera){
+		if (!(camera instanceof Camera)){
+			alert('the parameter is not a light');
+			return;
+		}
+		this.list.push(camera);
+	},
+
+	getArray: function(type){
+		var a = [];
+		for(var i = 0, max = this.list.length; i < max; i+=1){
+			a = a.concat(this.list[i][type]);
+		}
+		return a;
+	},
+
+	get: function(idx){
+		if ((typeof idx == 'number') && idx >= 0 && idx < this.list.length){
+			return this.list[idx];
+		}
+		else if (typeof idx == 'string'){
+			for(var i=0, max = this.list.length; i < max; i+=1){
+				if (this.list[i].alias == idx) return this.list[i];
+			}
+			throw 'Camera ' + idx + ' does not exist';
+		}
+		else {
+			throw 'Unknown parameter';
+		}
+	},
+
+	getNumCameras: function() {
+		if (this.list.length <= 0) return 1
+		else return this.list.length
+	}
+}
+
+/**
+* Camera Interactor
+*
+* This object listens for mouse and keyboard events on the canvas, then, it interprets them and sends the intended instruction to the camera
+*/
+function CameraInteractor(camera,canvas){
+
+    this.camera = camera;
+    this.canvas = canvas;
+    this.update();
+
+    this.dragging = false;
+    this.picking = false;
+    this.x = 0;
+    this.y = 0;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.button = 0;
+    this.ctrl = false;
+    this.key = 0;
+
+    this.MOTION_FACTOR = 10.0;
+    this.dloc = 0;
+    this.dstep = 0;
+
+	this.picker = null;
+
+}
+
+CameraInteractor.prototype.setPicker = function(p){
+	this.picker = p;
+}
+
+CameraInteractor.prototype.get2DCoords = function(ev){
+	var x, y, top = 0, left = 0, obj = this.canvas;
+
+	while (obj && obj.tagName != 'BODY') {
+		top += obj.offsetTop;
+		left += obj.offsetLeft;
+		obj = obj.offsetParent;
+	}
+
+    left += window.pageXOffset;
+    top  += window.pageYOffset;
+
+	x = ev.clientX - left;
+	y = c_height - (ev.clientY - top);
+
+	return {x:x,y:y};
+}
+
+CameraInteractor.prototype.onMouseUp = function(ev){
+	this.dragging = false;
+
+    if (!ev.shiftKey){
+        this.picking = false;
+        if(this.picker) { this.picker.stop(); }
+    }
+}
+
+CameraInteractor.prototype.onMouseDown = function(ev){
+    this.dragging = true;
+    this.x = ev.clientX;
+	this.y = ev.clientY;
+	this.button = ev.button;
+	this.dstep = Math.max(this.camera.position[0],this.camera.position[1],this.camera.position[2])/100;
+
+    if (this.picker == null) return;
+
+    var coords = this.get2DCoords(ev);
+    this.picking = this.picker.find(coords);
+
+    if (this.picking){
+        var count = this.picker.plist.length;
+        var message = count==1?count+' object has been selected': count+' objects have been selected';
+        $('#title-id').html(message);
+    }
+    else{
+        this.picker.stop();
+        $('#title-id').html('Please select an object and drag it. (Alt key drags on the camera axis)');
+    }
+}
+
+CameraInteractor.prototype.onMouseMove = function(ev){
+	this.lastX = this.x;
+	this.lastY = this.y;
+	this.x = ev.clientX;
+    this.y = ev.clientY;
+
+	if (!this.dragging) return;
+
+
+	this.ctrl = ev.ctrlKey;
+	this.alt = ev.altKey;
+	var dx = this.x - this.lastX;
+	var dy = this.y - this.lastY;
+
+    if (this.picking && this.picker.moveCallback){
+        this.picker.moveCallback(this,dx,dy);
+        return;
+    }
+
+	if (this.button == 0) {
+		if(this.alt){
+			this.dolly(dy);
+		}
+		else{
+			this.rotate(dx,dy);
+		}
+	}
+}
+
+CameraInteractor.prototype.onKeyDown = function(ev){
+    var c = this.camera;
+
+	this.key = ev.keyCode;
+	this.ctrl = ev.ctrlKey;
+
+	if (!this.ctrl){
+		if (this.key == 38){
+			c.changeElevation(10);
+		}
+		else if (this.key == 40){
+			c.changeElevation(-10);
+		}
+		else if (this.key == 37){
+			c.changeAzimuth(-10);
+		}
+		else if (this.key == 39){
+			c.changeAzimuth(10);
+		}
+        else if (this.key == 87) {  //w
+            if(fovy) fovy+=5;
+            console.info('FovY:'+fovy);
+        }
+        else if (this.key == 78) { //n
+            if(fovy) fovy-=5;
+            console.info('FovY:'+fovy);
+        }
+
+	}
+}
+
+CameraInteractor.prototype.onKeyUp = function(ev){
+    if (ev.keyCode == 17){
+		this.ctrl = false;
+	}
+}
+
+CameraInteractor.prototype.update = function(){
+    var self = this;
+	var canvas = this.canvas;
+
+
+	canvas.onmousedown = function(ev) {
+		self.onMouseDown(ev);
+    }
+
+    canvas.onmouseup = function(ev) {
+		self.onMouseUp(ev);
+    }
+
+	canvas.onmousemove = function(ev) {
+		self.onMouseMove(ev);
+    }
+
+	window.onkeydown = function(ev){
+		self.onKeyDown(ev);
+	}
+
+	window.onkeyup = function(ev){
+		self.onKeyUp(ev);
+	}
+}
+
+CameraInteractor.prototype.dolly = function(value){
+ 	if (value>0){
+ 		this.dloc += this.dstep;
+ 	}
+ 	else{
+ 		this.dloc -= this.dstep;
+ 	}
+	this.camera.dolly(this.dloc);
+}
+
+CameraInteractor.prototype.rotate = function(dx, dy){
+
+
+	var camera = this.camera;
+	var canvas = this.canvas;
+
+	var delta_elevation = -20.0 / canvas.height;
+	var delta_azimuth   = -20.0 / canvas.width;
+
+	var nAzimuth = dx * delta_azimuth * this.MOTION_FACTOR;
+	var nElevation = dy * delta_elevation * this.MOTION_FACTOR;
+
+	camera.changeAzimuth(nAzimuth);
+	camera.changeElevation(nElevation);
+}
+
+
+function SceneTransforms(c){
+	this.stack = [];
+	this.camera = c;
+	this.mvMatrix    = mat4.create();    // modelview
+	this.pMatrix     = mat4.create();    // projection
+	this.nMatrix     = mat4.create();    // normal
+};
+
+
+SceneTransforms.prototype.calculateModelView = function(){
+	this.mvMatrix = this.camera.getViewTransform();
+};
+
+SceneTransforms.prototype.calculateNormal = function(){
+    mat4.identity(this.nMatrix);
+    mat4.set(this.mvMatrix, this.nMatrix);
+    mat4.inverse(this.nMatrix);
+    mat4.transpose(this.nMatrix);
+};
+
+SceneTransforms.prototype.calculatePerspective = function(){
+    mat4.identity(this.pMatrix);
+    mat4.perspective(30, c_width / c_height, 0.1, 1000.0, this.pMatrix);
+};
+
+
+SceneTransforms.prototype.init = function(){
+    this.calculateModelView();
+    this.calculatePerspective();
+    this.calculateNormal();
+};
+
+
+//resize screen
+SceneTransforms.prototype.updatePerspective = function(){
+    mat4.perspective(30, c_width / c_height, 0.1, 1000.0, this.pMatrix);
+};
+
+
+/**
+* Maps the matrices to shader matrix uniforms
+*
+* Called once per rendering cycle.
+*/
+
+
+SceneTransforms.prototype.setMatrixUniforms = function(){
+	this.calculateNormal();
+    gl.uniformMatrix4fv(Program.uMVMatrix, false, this.mvMatrix);
+    gl.uniformMatrix4fv(Program.uPMatrix, false, this.pMatrix);
+    gl.uniformMatrix4fv(Program.uNMatrix, false, this.nMatrix);
+};
+
+
+SceneTransforms.prototype.push = function(){
+	var memento =  mat4.create();
+	mat4.set(this.mvMatrix, memento);
+	this.stack.push(memento);
+};
+
+SceneTransforms.prototype.pop = function(){
+	if(this.stack.length == 0) return;
+	this.mvMatrix  =  this.stack.pop();
+};
 
 'use strict';
 
 function NodeTree(entity, father, children) {
     this.entity    = entity   || '';
-    this.father    = father   || '';
     this.children  = children || [];
+
+    if (father) father.addChild(this);
+    else this.father = '';
   }
 
   NodeTree.prototype.getFather = function() {
@@ -1139,7 +1231,8 @@ function NodeTree(entity, father, children) {
   };
 
   NodeTree.prototype.setFather = function(father) {
-    this.father = father;
+    if (father instanceof NodeTree) this.father = father;
+    else console.log('This is not a node');
   }
 
   NodeTree.prototype.getEntity = function() {
@@ -1147,7 +1240,8 @@ function NodeTree(entity, father, children) {
   }
 
   NodeTree.prototype.setEntity = function(entity) {
-    this.entity = entity;
+    if (entity instanceof Entity) this.entity = entity;
+    else console.log('This is not an entity');
   }
 
   NodeTree.prototype.index = function() {
@@ -1207,10 +1301,10 @@ function NodeTree(entity, father, children) {
     return (this.children.indexOf(child) != -1);
   };
 
-  NodeTree.prototype.draw = function() {
+  NodeTree.prototype.draw = function(gl, program) {
     if (this.entity) {
-      var children = this.children;
-      this.entity.beginDraw(children);
+      console.log(this.entity);
+      this.entity.beginDraw(gl, program);
       this.entity.endDraw();
     } else {
       console.log('There is no entity for this node');
@@ -1219,934 +1313,237 @@ function NodeTree(entity, father, children) {
 
 'use strict';
 
-function ShadersContent() {
-  this.vertexContent =
-    'const int NUM_LIGHTS = 4;'+
-
-    'attribute vec3 aVertexPosition;'+
-    'attribute vec3 aVertexNormal;'+
-    'attribute vec4 aVertexColor;'+
-
-    'uniform mat4 uMVMatrix;'+
-    'uniform mat4 uPMatrix;'+
-    'uniform mat4 uNMatrix;'+
-
-    'uniform bool uTranslateLights;'+
-    'uniform vec3 uLightPosition[NUM_LIGHTS];'+
-
-
-    'varying vec3 vNormal;'+
-    'varying vec3 vLightRay[NUM_LIGHTS];'+
-    'varying vec3 vEye[NUM_LIGHTS];'+
-
-    'void main(void) {'+
-
-    '     vec4 c = aVertexColor;'+
-    '     vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);'+
-    '     vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));'+
-    '     vec4 lightPosition = vec4(0.0);'+
-
-    '     if (uTranslateLights){'+
-    '         for(int i=0; i < NUM_LIGHTS; i++){'+
-    '           lightPosition =   uMVMatrix * vec4(uLightPosition[i], 1.0);'+
-    '           vLightRay[i] = vertex.xyz - lightPosition.xyz;'+
-    '           vEye[i] = -vec3(vertex.xyz);'+
-    '         }'+
-    '     }'+
-    '     else {'+
-    '        for(int i=0; i < NUM_LIGHTS; i++){'+
-    '          lightPosition = vec4(uLightPosition[i], 1.0);'+
-    '          vLightRay[i] = vertex.xyz - lightPosition.xyz;'+
-    '          vEye[i] = -vec3(vertex.xyz);'+
-    '        }'+
-    '    }'+
-    '    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);'+
-    '}';
-
-  this.fragmentContent =
-    '#ifdef GL_ES'+
-    'precision highp float;'+
-    '#endif'+
-
-
-    //Light uniforms
-    'const int NUM_LIGHTS = 4;'+
-    'uniform vec3  uLa[NUM_LIGHTS];'+   //ambient
-    'uniform vec3  uLd[NUM_LIGHTS];'+   //diffuse
-    'uniform vec3  uLs[NUM_LIGHTS];'+ //specular
-    'uniform vec3 uLightPosition[NUM_LIGHTS];'+
-
-    //Material uniforms
-    'uniform vec3  uKa;'+   //ambient
-    'uniform vec3  uKd;'+   //diffuse
-    'uniform vec3  uKs;'+   //specular
-    'uniform float uNs;'+   //specular coefficient
-    'uniform float d;'+     //Opacity
-    'uniform int   illum;'+ //Illumination mode
-
-
-    'uniform bool  uWireframe;'+
-
-
-    'varying vec3 vNormal;'+
-    'varying vec3 vLightRay[NUM_LIGHTS];'+
-    'varying vec3 vEye[NUM_LIGHTS];'+
-
-    'float calculateAttenuation(in vec3 ray){'+
-    '    float dist = length(ray);'+
-    '    return (1.0 / (0.1 * dist));'+
-    '}'+
-
-    'void main(void) {'+
-    '    if (uWireframe || illum == 0){'+
-    '        gl_FragColor = vec4(uKd,d);'+
-    '        return;'+
-    '    }'+
-
-    '   vec3 COLOR = vec3(0.0,0.0,0.0);'+
-    '   vec3 N =  normalize(vNormal);'+
-    '   vec3 L =  vec3(0.0,0.0,0.0);'+
-    '   vec3 E =  vec3(0.0,0.0,0.0);'+
-    '   vec3 R =  vec3(0.0,0.0,0.0);'+
-    '   vec3 deltaRay = vec3(0.0);'+
-    '   const int  lsize = 2;'+
-    '   const float step = 0.25;'+
-    '   const float inv_total = 1.0/((float(lsize*lsize) + 1.0)*(float(lsize*lsize) + 1.0));'+  //how many deltaRays
-
-    '   float dx = 0.0;'+
-    '   float dz = 0.0;'+
-    '   float LT = 0.0;'+
-
-    '   if (illum == 1){'+
-    '        for(int i = 0; i < NUM_LIGHTS; i++){'+
-    '            L = normalize(vLightRay[i]);'+
-    '            N = normalize(vNormal);'+
-    '            COLOR += (uLa[i] * uKa) + (uLd[i] * uKd * clamp(dot(N, -L),0.0,1.0));'+
-    '        }'+
-    '        gl_FragColor =  vec4(COLOR,d);'+
-    '        return;'+
-    '   }'+
-
-    '   if (illum == 2){'+
-    '        for(int i = 0; i < NUM_LIGHTS; i++){'+
-
-    '            E = normalize(vEye[i]);'+
-    '            L = normalize(vLightRay[i]);'+
-    '            R = reflect(L, N);'+
-    '            COLOR += (uLa[i] * uKa);'+
-    '            COLOR += (uLd[i] * uKd * clamp(dot(N,-L),0.0,1.0));'+// * calculateAttenuation(vLightRay[i]));
-    '            COLOR += (uLs[i] * uKs * pow( max(dot(R, E), 0.0), uNs) * 4.0);'+
-    '        }'+
-    '        gl_FragColor =  vec4(COLOR,d);'+
-    '        return;'+
-    '   }'+
-    '}';
-}
-
-'use strict';
-
-  function Shader(gl) {
-    this.program      = null; //gl.createProgram
-    this.vertices     = null;
-    this.indices      = null;
-
-    //attributes pointing to the current VBO
-    this.index        = null;
-    this.size         = null;
-    this.type         = null; //FIXED, BYTE, UNSIGNED_BYTE, FLOAT, SHORT, or UNSIGNED_SHORT.
-    this.norm         = null;
-    this.stride       = null;
-    this.offset       = null;
-    this.pointer      = null;
-
-
-    this.vertexBuffer = null; //gl.createBuffer();//current VBO
-    this.indexBuffer  = null; //gl.createBuffer();
-
-    this.vertexShader   = document.getElementById('vertexShader');
-    this.fragmentShader = document.getElementById('fragmentShader');
-  }
-
-  Shader.prototype.setProgram = function(program) {
-    this.program = program;
+  function Tree() {
+    this.root = new NodeTree();
   };
 
-  Shader.prototype.getVertexShader = function() {
-    return this.vertexShader.innerHTML;
-  };
-
-  Shader.prototype.getFragmentShader = function() {
-    return this.fragmentShader.innerHTML;
-  };
-
-  Shader.prototype.getVertices = function() {
-    return this.vertices;
-  };
-
-  Shader.prototype.getIndices = function() {
-    return this.indices;
-  };
-
-  Shader.prototype.setVertices = function(vertices) {
-    this.vertices = vertices;
-  };
-
-  Shader.prototype.setIndices = function(indices) {
-    this.indices = indices;
-  };
-
-  Shader.prototype.getVertexBuffer = function() {
-    return this.vertexBuffer;
-  };
-
-  Shader.prototype.getIndexBuffer = function() {
-    return this.indexBuffer;
-  };
-
-  Shader.prototype.setBuffers = function(context) { //context = Aubengine.gl
-    context.bindBuffer(context.ARRAY_BUFFER, this.getVertexBuffer());
-    context.bufferData(context.ARRAY_BUFFER, new Float32Array(this.getVertices()), context.STATIC_DRAW);
-    context.bindBuffer(context.ARRAY_BUFFER, null);
-
-    context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.getIndexBuffer());
-    context.bufferData(context.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.getIndices()), context.STATIC_DRAW);
-    context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, null);
-  }
-
-  Shader.prototype.setPointer = function(context) {
-    this.pointer = context.vertexAttribPointer(this.index, this.size, this,type, this.norm, this.stride, this.offset);
-  }
-
-  Shader.prototype.getPointer = function(context) {
-    return this.pointer;
-  };
-
-
-  Shader.prototype.vertexName = function() {
-    return "x-shader/x-vertex";
-  };
-
-
-  Shader.prototype.fragmentName = function() {
-    return "x-shader/x-fragment";
- };
-
-  Shader.prototype.createShader = function(type) {
-    if (type == 'VERTEX') {return gl.createShader(gl.VERTEX_SHADER)}
-    else if (type == 'FRAGMENT') {return gl.createShader(gl.FRAGMENT_SHADER)}
-    else {console.log('Incorrect shader'); return null};
-  };
-
-  Shader.prototype.checkCompilation = function(gl, shader) {
-    if (!gl.getShaderParameters(shader, gl.COMPILE_STATUS)) return false;
-  }
-
-  Shader.prototype.addShader = function(type, gl, program, source) {
-    var shader = this.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!this.checkCompilation(gl, shader)) return gl.getShaderInfoLog(shader);
-    gl.attachShader(program, shader);
-  };
-
-  Shader.prototype.initProgram = function(gl) {
-    var program = null;
-    if (this.program == null) { //no program yet, it has to read the shaders
-      program = gl.createProgram();
-      this.addShader('VERTEX',   gl, program, this.getVertexShader());
-      this.addShader('FRAGMENT', gl, program, this.getFragmentShader());
-      gl.linkProgram(program);
-      gl.useProgram(program);
-      return program;
-    } else { //use the current program configuration
-      return this.program;
-    };
-  };
-
-  Shader.prototype.draw = function(gl) { //the beginDraw hardrock function
-    //Initiate the program with the shader configuration
-      var program = this.initProgram(gl);
-      /* TODO */
-      //1. Vertex Configuration. Model View matrix.
-      //2. Lights Configuration.
-      //3. Textures Configuration.
-      //4. Camera Configuration
-      //5. Bind Buffers
-  };
-
-'use strict';
-
-function Color(hex) {
-    this.hex  = hex || '#FFFFFF';
-    this.rgba = this.hex2rgb(this.hex, 1);
-    this.vec  = null;
-  }
-
-  Color.prototype.hex2rgb = function(hex, opacity) {
-    var hexStr = hex.replace('#','');
-    var r = parseInt(hexStr.substring(0,2), 16);
-    var g = parseInt(hexStr.substring(2,4), 16);
-    var b = parseInt(hexStr.substring(4,6), 16);
-    return [r/255,g/255,b/255,opacity];
-  };
-
-  Color.prototype.rgb2hex = function(rgb) {
-   return "#" +
-    ("0" + parseInt(rgb[0],10).toString(16)).slice(-2) +
-    ("0" + parseInt(rgb[1],10).toString(16)).slice(-2) +
-    ("0" + parseInt(rgb[2],10).toString(16)).slice(-2);
-  }
-
-  Color.prototype.setColorRgba = function(r,g,b,a) {
-    this.rgba     = [r,g,b, a || 1];
-    this.hex      = this.rgb2hex(this.rgba);
-    this.vec      = vec4(r,g,b,a);
-  }
-
-  Color.prototype.setColorHex = function(hex, opacity) {
-    this.hex      = hex;
-    this.rgba     = this.rgba(hex, opacity || 1);
-    this.vec      = vec4(this.rgba[0],this.rgba[1],this.rgba[2],this.rgba[3]);
-  }
-
-  Color.prototype.getHex  = function() {
-    return this.hex;
-  };
-
-  Color.prototype.getRgba = function() {
-    return this.rgba;
-  };
-
-  Color.prototype.getVec  = function() {
-    return this.vec;
-  };
-
-'use strict';
-
-function Light(name){
-	this.id = name;
-	this.position = [0.0,0.0,0.0];
-	this.ambient  = [0.0,0.0,0.0,0.0];
-	this.diffuse  = [0.0,0.0,0.0,0.0];
-	this.specular = [0.0,0.0,0.0,0.0];
-}
-
-  Light.prototype.setPosition = function(position) {
-  	this.position = position.slice(0);
-  }
-  Light.prototype.setDiffuse = function (diffuse) {
-  	this.diffuse = diffuse.slice(0);
-  }
-
-  Light.prototype.setAmbient = function(ambient) {
-  	this.ambient = ambient.slice(0);
-  }
-
-  Light.prototype.setSpecular = function(specular) {
-  	this.specular = specular.slice(0);
-  }
-
-  Light.prototype.setProperty = function(name, value) {
-  	if(typeof name == 'string'){
-  		if (value instanceof Array){
-  			this[name] = value.slice(0);
-  		}
-  		else {
-  			this[name] = value;
-  		}
-  	}
-  	else{
-  		throw 'The property name must be a string';
-  	}
-  }
-
-'use strict';
-
-function Transform(matrix) {
-    this.matrix = matrix;
-  }
-
-Transform.prototype.scale = function(gl, x, y, z, matrix) {
-
-};
-
-Transform.prototype.rotate = function() {
-  /* TODO */
-};
-
-Transform.prototype.translate = function(light) {
-  /* TODO */
-};
-
-'use strict';
-/* uses gl-matrix-min.js */
-var CAMERA_ORBITING_TYPE = 1;
-var CAMERA_TRACKING_TYPE = 2;
-
-function Camera(t){
-    this.matrix     = mat4.create();
-    this.up         = vec3.create();
-    this.right      = vec3.create();
-    this.normal     = vec3.create();
-    this.position   = vec3.create();
-    this.focus      = vec3.create();
-    this.observer   = 0.0;
-    this.elevation  = 0.0;
-    this.type       = t; //1 or 2
-    this.steps      = 0;
-
-    this.home = vec3.create();
-
-    this.hookRenderer = null;
-    this.hookGUIUpdate = null;
-
-    this.FOV = 30;
-    this.minZ = 0.1;
-    this.maxZ = 10000
-
-    this.prototype = new Entity();
-}
-
-Camera.prototype.setType = function(type){
-    this.type = type;
-    if (type != CAMERA_ORBITING_TYPE && type != CAMERA_TRACKING_TYPE) {
-        alert('Wrong Camera Type!. Setting Orbitting type by default');
-        this.type = CAMERA_ORBITING_TYPE;
-    }
-}
-
-Camera.prototype.goHome = function(home){
-    if (home != null){
-        this.home = home;
-    }
-
-    this.setPosition(this.home);
-    this.setobserver(0);
-    this.setElevation(0);
-    this.steps = 0;
-}
-
-Camera.prototype.dolly = function(steps){
-    var camera   = this;
-    var position = vec3.create();
-    var normal   = vec3.create();
-
-    position = camera.position;
-    var step = steps - c.steps;
-
-    vec3.normalize(camera.normal,normal);
-
-    var newPosition = vec3.create();
-
-    if(camera.type == CAMERA_TRACKING_TYPE){
-        newPosition[0] = position[0] - step*normal[0];
-        newPosition[1] = position[1] - step*normal[1];
-        newPosition[2] = position[2] - step*normal[2];
-    }
-    else{
-        newPosition[0] = position[0];
-        newPosition[1] = position[1];
-        newPosition[2] = position[2] - step;
-    }
-
-    camera.setPosition(newPosition);
-    camera.steps = step;
-}
-
-Camera.prototype.setPosition = function(position){
-    vec3.set(position, this.position);
-    this.update();
-}
-
-//Align the normal to the focus vector
-Camera.prototype.setFocus = function(focus){
-	vec3.set(focus, this.focus);
-	this.update();
-}
-
-Camera.prototype.setObserver = function(observer){
-    this.changeObserver(observer - this.observer);
-}
-
-Camera.prototype.changeObserver = function(observer){
-    var camera = this;
-    camera.observer += observer;
-
-    if (camera.observer > 360 || camera.observer <-360) {
-		camera.observer = camera.observer % 360;
-	}
-    camera.update();
-}
-
-Camera.prototype.setElevation = function(ellevation){
-    this.changeElevation(elevation - this.elevation);
-}
-
-Camera.prototype.changeElevation = function(elevation){
-    var ccamera = this;
-
-    camera.elevation += elevation;
-
-    if (camera.elevation > 360 || camera.elevation <-360) {
-		camera.elevation = camera.elevation % 360;
-	}
-    camera.update();
-}
-
-Camera.prototype.calculateOrientation = function(){
-	var matrix = this.matrix;
-    mat4.multiplyVec4(matrix, [1, 0, 0, 0], this.right);
-    mat4.multiplyVec4(matrix, [0, 1, 0, 0], this.up);
-    mat4.multiplyVec4(matrix, [0, 0, 1, 0], this.normal);
-}
-
-Camera.prototype.update = function(){
-	mat4.identity(this.matrix);
-
-	this.calculateOrientation();
-
-    if (this.type == CAMERA_TRACKING_TYPE){
-        mat4.translate(this.matrix, this.position);
-        mat4.rotateY(this.matrix, this.observer * Math.PI/180);
-        mat4.rotateX(this.matrix, this.elevation * Math.PI/180);
-    }
-    else {
-        var trxLook = mat4.create();
-        mat4.rotateY(this.matrix, this.observer * Math.PI/180);
-        mat4.rotateX(this.matrix, this.elevation * Math.PI/180);
-        mat4.translate(this.matrix,this.position);
-    }
-
-    this.calculateOrientation();
-
-    if(this.type == CAMERA_TRACKING_TYPE){
-        mat4.multiplyVec4(this.matrix, [0, 0, 0, 1], this.position);
-    }
-
-    if(this.hookRenderer){
-        this.hookRenderer();
-    }
-    if(this.hookGUIUpdate){
-        this.hookGUIUpdate();
-    }
-};
-
-Camera.prototype.getViewTransform = function(){
-    var matrix = mat4.create();
-    mat4.inverse(this.matrix, matrix);
-    return matrix;
-};
-
-/* Using K3D library for meshes. http://k3d.ivank.net/ */
-'use strict';
-  function Mesh(gl) {
-    this.vertices           = new Float32Array();
-    this.normals            = new Float32Array();
-    this.vertexCoordinates  = new Float32Array();
-    this.verticesAndIndices = new Array();
-
-    this.file           = "";
-    this.textures       = new Array();
-    this.textureUrl     = new Array();
-    this.texturePath    = "";
-    this.textureNum     = null;
-    this.textureImage   = null;
-    this.texture        = null;
-    this.color          = new Color('#222222');
-  }
-
-  Mesh.prototype.setVertices = function(vertices) {
-    this.vertices = vertices;
-  };
-
-  Mesh.prototype.setNormals = function(normals) {
-    this.normals = normals;
-  }
-
-  Mesh.prototype.setVertexCoordinates = function(vertexCoordinates) {
-    this.vertexCoordinates = vertexCoordinates;
-  };
-
-  Mesh.prototype.setVerticesAndIndices = function(verticesAndIndices) {
-    this.verticesAndIndices = verticesAndIndices;
-  };
-
-  Mesh.prototype.setMesh = function(dataFile) { //datafile = array
-    this.vertices           = dataFile[0];
-    this.normals            = dataFile[1];
-    this.vertexCoordinates  = dataFile[2];
-    this.verticesAndIndices = dataFile[3];
-  }
-
-  Mesh.prototype.getMesh = function() {
-    return [this.vertices, this.normals, this.vertexCoordinates, this.verticesAndIndices];
-  }
-
-  Mesh.prototype.addIndicesVertices = function(model, indices) {
-    model.i_verts.forEach(function(element, index) {indices.push(index);})
-    return indices;
-  };
-
-  Mesh.prototype.startMesh = function(model, modelFiles) {
-    this.vertices           = new Float32Array(K3D.edit.unwrap(model.i_verts, model.c_verts, 3));
-    this.normals            = new Float32Array(K3D.edit.unwrap(model.i_norms, model.c_norms, 3));
-    this.vertexCoordinates  = new Float32Array(K3D.edit.unwrap(model.i_uvt, model.c_uvt, 2));
-    this.verticesAndIndices = this.addIndicesVertices(model, new Array());
-    var mesh = this.getMesh();
-    modelFiles.push(mesh);
-  };
-
-  Mesh.prototype.isAnObj  = function(file) {
-    return file.indexOf('.obj' >= 0);
-  }
-
-  Mesh.prototype.isAModel = function(file, models) {
-    return models.indexOf(file >= 0);
-  }
-
-  Mesh.prototype.parseModel = function(obj, mesh, models) {
-    models.push(mesh.file);
-    return K3D.parse.fromOBJ(obj);
-  }
-
-  Mesh.prototype.initMesh = function(obj, mesh, models, modelFiles) {
-    var model  = null;
-    var exists = false;
-
-    if (this.isAnObj(mesh.file)) {
-      if (this.isAModel(this.file, models)) {
-        model = this.parseModel(obj, mesh, models);
-      }
-
-      else {//is not a model
-        exists = true;
-        var index     = models.indexOf(mesh.file);
-        var dataFile  = modelFiles[index];
-        this.setMesh(dataFile);
-      }
-    } //is not an object
-
-    if(model != null && !exists){
-      this.startMesh(models, modelFiles)
-    }
-
-    else {
-      console.log("The model couldn't be created");
-    }
-  };
-
-  /* Texture Operations */
-  Mesh.prototype.urlLoaded = function() {
-    return this.textures.indexOf(this.textureUrl >= 0);
-  };
-
-  Mesh.prototype.isLoaded = function(texture) {
-    return this.textures.indexOf(texture >= 0);
-  }
-
-  Mesh.prototype.loadImage = function(gl, mesh) {
-    this.textureImg = new Image();
-    this.textureImg.src = this.textureUrl;
-    this.textureImg.onload = function() {
-      mesh.bindImageTexture(gl, mesh.textureImg, mesh.texture);
-    }
-  };
-
-  Mesh.prototype.loadTexture = function(gl, mesh) {
-    if (!this.urlLoaded()) {
-      this.texture = gl.createTexture();
-      this.loadImage(gl, mesh);
-    }
-  };
-
-  Mesh.prototype.bindImageTexture  = function(gl, image, texture) {
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    gl.generateMipmap(gl.TEXTURE_2D);
-    gl.bindTexture(gl.TEXTURE_2D, null);
-    this.saveFiles(image, texture);
-  }
-
-  Mesh.prototype.getTextureFromSrc = function(src) {
-    var files = src.split("/");
-    return files[files.lenght-1];
-  }
-
-  Mesh.prototype.saveFiles = function(image, texture) {
-    var textureFile = this.getTextureFromSrc(image.src);
-    if (this.isLoaded(textureImage)) {
-      this.textures.push(textureFile);
-      this.textureFiles.push([image, texture, textureFile]);
-    }
-    this.updateNum();
-  }
-
-  Mesh.prototype.updateNum = function() {
-    this.textureNum = this.textures.indexOf(this.textureImg.src);
-  };
-
-'use strict';
-
-function Resource(name, data) {
-    this.name = name;
-    this.data = data || '';
-  };
-
-  Resource.prototype.setName = function(name) {
-    this.name = name;
-  };
-
-  Resource.prototype.getName = function() {
-    return this.name;
-  };
-
-'use strict';
-
-function ResourceManager(path) {
-    this.resources = [];
-    this.path      = path || '';
-    this.file      = require("fs");
-  }
-
-ResourceManager.prototype.getResource = function(name) {
-  var resource = this.searchResource(name);
-  if (!resource) {
-    resource = new Resource(name, '');
-    this.writeResource(resource);
-  }
-  return resource;
-};
-
-ResourceManager.prototype.writeResource = function(resource) {
-  this.file.appendFileSync(this.path, resource.name + '#' + resource.data + '\n');
-}
-
-ResourceManager.prototype.readName = function(line) {
-  return line.split('#')[0];
-}
-
-ResourceManager.prototype.readData = function(line) {
-  return line.split('#')[1];
-}
-
-ResourceManager.prototype.getFileText = function(path) {
-  console.log(this.file);
-  this.path = path;
-  return this.file.readFileSync(this.path).toString();
-};
-
-ResourceManager.prototype.getFileContent = function() {
-  return this.file.readFileSync(this.path).toString().split('\n');
-}
-
-ResourceManager.prototype.searchResource = function(name) {
-  var fileContent = this.getFileContent();
-  var i = 0;
-  while ( i < fileContent.length) {
-    if (this.readName(fileContent[i]) == name) return fileContent[i];
-    i++;
-  }
-  return false;
-}
-
-ResourceManager.prototype.addResource = function(resource) {
-  this.resources.push(resource);
-}
-
-ResourceManager.prototype.getFile = function() {
-  return this.file;
-}
-
-ResourceManager.prototype.setPath = function(path) {
-  this.path = path;
-}
-
-ResourceManager.prototype.getPath = function(path) {
-  return this.path;
-}
-
-ResourceManager.prototype.readAllResources = function() {
-  var resource = null;
-  this.getFileContent().forEach(function (line) {
-    resource = new Resource(this.readName(line), this.readData(line));
-    this.resources.push(resource);
-  })
-};
-
-'use strict';
-
-function Scene(gl, program) {
-    this.root    = new NodeTree();
-    this.tree    = new Tree(this.root);
-    this.matrix  = new Array();
-    this.gl      = gl;
-    this.shader  = new Shader();
-  }
-
-  Scene.prototype.setGl = function(gl) {
-    this.gl = gl;
-  };
-
-  Scene.prototype.getLastMatrix = function() {
-    	if (this.matrix.length>0) return this.matrix[this.matrix.length-1];
-    	else return null;
-  };
-
-  Scene.prototype.getMatrix = function() {
-    return this.matrix;
-  };
-
-  Scene.prototype.getRoot = function() {
+  Tree.prototype.getRoot = function() {
     return this.root;
   };
 
-  Scene.prototype.getTree = function() {
-    return this.tree;
+  Tree.prototype.preorder = function(node) {
+    if (node == null) return;
+    if (node.getEntity() instanceof Mesh) node.draw();
+    this.preorder(node.firstChild());
+    this.preorder(node.nextSibling());
   };
 
+  Tree.prototype.save = function(node, scene) {
+    if (node == null) return;
+    if (node.getEntity() instanceof Light) Lights.add(node.getEntity());
+    else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity());
+    else if (node.getEntity() instanceof Mesh) {
+      Scene.loadObject(node.getEntity().getFilename(), node.getEntity().getAlias());
+    };
+    this.save(node.firstChild(), scene);
+    this.save(node.nextSibling(),scene);
+  };
 
-  /* scene lights */
-  var Lights = {
-  	list : [],
-  	add : function(light) {
-      if (!(light instanceof Light)){
-        alert('the parameter is not a light');
-        return;
-      }
-      this.list.push(light);
-  	},
+  Tree.prototype.draw = function() {
+    this.preorder(this.getRoot().firstChild());
+  };
 
-  	getArray: function(type) {
-  		var array = [];
-      this.list.forEach(function(element, index) {
-        array = array.concat(element[type]);
-      })
-      return array;
-  	},
-
-  	get: function(index){
-  		if ((typeof index == 'number') && index >= 0 && index < this.list.length){
-  			return this.list[index];
-  		}
-  		else if (typeof index == 'string'){
-  			for(var i=0, max = this.list.length; i < max; i+=1){
-  				if (this.list[i].id == index) return this.list[i];
-  			}
-  			throw 'Light ' + index + ' does not exist';
-  		}
-  		else {
-  			throw 'Unknown parameter';
-  		}
-  	}
+  Tree.prototype.saveEntities = function() {
+    this.save(this.getRoot().firstChild());
   }
 
-'use strict';
+var WEBGLAPP_RENDER      = undefined;
+var WEBGLAPP_TIMER_ID    = -1;
+var WEBGLAPP_RENDER_RATE = 16;
 
-/* Dependencies */
+function Aubengine(canvas, tree) {
+    this.interactor = null; //the camera interactor
+    this.transforms = null; //object transformations
+    this.tree       = new Tree();
 
-function Aubengine(width, height, canvasId) {
-    /* Properties */
-    this.width     = width;
-    this.height    = height;
-    this.names     = ['webgl', 'experimental-webgl', 'webkit-3d', 'moz-webgl'];
-    this.canvasId  = canvasId;
+    gl = Configuration.getGLContext(canvas); //clobal context
 
-    /* WebGL elements*/
-    this.gl        = null;
-
-    /* Entities */
-    this.mesh      = new Mesh();
-    this.light     = new Light();
-    this.color     = new Color();
-    this.transform = new Transform();
-    this.shader    = new Shader(this.gl);
-
-    /* Scene */
-    this.scene   = new Scene(this.gl, this.program);
-
-    /* Resource Manager */
-    this.content = new ShadersContent();
-    this.vertexShaderContent   = this.content.vertexContent;
-    this.fragmentShaderContent = this.content.fragmentContent;
+    this.canvas = canvas;
 }
 
-  Aubengine.prototype.setVertexShaderContent = function(content) {
-    this.vertexShaderContent = content;
-  };
+Aubengine.prototype.getTree = function() {
+  return this.tree;
+};
 
-  Aubengine.prototype.getManager = function() {
-    return this.manager;
-  }
-  /* Basic previous configuration */
-  Aubengine.prototype.getGl = function() {
-    return this.gl;
-  };
+Aubengine.prototype.getRoot = function() {
+  return this.tree.getRoot();
+};
 
-  Aubengine.prototype.setGl = function(gl) {
-    this.gl = gl;
-    this.scene.setGl(gl);
-  };
+Aubengine.prototype.setUpEnvironment = function () {
+  gl.clearColor(56/255,161/255,172/255, 1.0);
+  gl.clearDepth(1.0);
 
-  Aubengine.prototype.setProgram = function(program) {
-    this.program = program;
-    this.scene.setProgram(program);
-  };
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+}
 
-  Aubengine.prototype.setShaders = function(content, type) {
-       var script = document.createElement('script');
-       script.setAttribute('type', type);
-       script.innerHTML = content;
-       document.body.appendChild(script);
-  }
+Aubengine.prototype.createCamera = function(alias, home, focus, azimuth, elevation) {
+  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, home, focus, azimuth, elevation);
+  return camera;
+};
 
-  Aubengine.prototype.startWeb = function() {
-    var canvas = document.getElementById(this.canvasId);
-    var i = 0;
-    this.gl = canvas.getContext('webgl');
-    this.setShaders(this.vertexShaderContent,   this.shader.vertexName());
-    this.setShaders(this.fragmentShaderContent, this.shader.fragmentName());
-    // while ((this.gl == null) && (i < this.names.length)) {
-    //   console.log(this.names[i]);
-    //   try {
-    //     this.gl = canvas.getContext(this.names[i]);
-    //   } catch (e) {
-    //     console.log(e);
-    //   };
-    //   i++;
-    // }
-  };
+Aubengine.prototype.setMainCamera = function(camera) {
+  camera.draw(); //provisional
+  this.interactor = new CameraInteractor(camera, this.canvas);
+  this.transforms = new SceneTransforms(camera);
+  this.transforms.init();       //global transforms
+  interactor = this.interactor; //global interactor
+}
 
-  Aubengine.prototype.createBuffer = function() {
-    this.gl.createBuffer();
-  };
+Aubengine.prototype.loadProgram = function(translateLights) {
+  Program.load();
 
-  Aubengine.prototype.isStarted = function() {
-    if (this.gl == null) {return false;}
-    else {return true;}
-  };
+  //lights uniform vector, uses PHONG
+  gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
+  gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));
+  gl.uniform3fv(Program.uLd, Lights.getArray('diffuse'));
+  gl.uniform3fv(Program.uLs, Lights.getArray('specular'));
 
+  //object properties uniform vector
+  gl.uniform3fv(Program.uKa, [1.0,1.0,1.0]);
+  gl.uniform3fv(Program.uKd, [1.0,1.0,1.0]);
+  gl.uniform3fv(Program.uKs, [1.0,1.0,1.0]);
 
+  gl.uniform1f(Program.uNs, 1.0);
+  gl.uniform1i(Program.uTranslateLights, translateLights || false);
+}
 
-/* Main functions, the real magic */
-  Aubengine.prototype.clear = function() {
-    if (this.isStarted()) {
-      this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-      this.gl.viewport(0, 0, this.width, this.height);
+Aubengine.prototype.createMesh = function(filename, alias) {
+  var mesh = new Mesh(filename, alias);
+  return mesh;
+};
+
+Aubengine.prototype.addModel = function(filename, alias, attributes, callback) {
+  Scene.loadObject(filename,alias,attributes,callback); //drawing
+};
+
+Aubengine.prototype.addFloor = function(visible) {
+  Floor.build(80,2);
+  Floor.Ka = [1,1,1];
+  Floor.Kd = [0.6,0.6,0.6]
+  Floor.Ks = [1,1,1];
+  Floor.Ni = 1;
+  Floor.Ns = 1;
+  Floor.d = 1.0;
+  Floor.illum = 1;
+  Floor.visible = visible;
+};
+
+Aubengine.prototype.createLight = function(name, position, diffuse, ambient, specular) {
+      if ((name == null) || (position == null) || (diffuse == null) || (ambient == null) || (specular == null)) {
+        alert('Light can not be created! Wrong parameters.');
+      } else {
+        var light = new Light(name);
+        light.setPosition(position);
+        light.setDiffuse(diffuse);
+        light.setAmbient(ambient);
+        light.setSpecular(specular);
+        //Lights.add(light);
+      }
+
+      return light;
+};
+
+Aubengine.prototype.addNode = function(father, node) {
+  father.addChild(node);
+};
+
+Aubengine.prototype.createNode = function(entity) {
+  var node = new NodeTree(entity);
+  return node;
+};
+//needs to be refactored
+Aubengine.prototype.draw = function() {
+  this.loadProgram(false);
+  gl.viewport(0, 0, c_width, c_height);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  this.transforms.updatePerspective();
+
+  try{
+      for (var i = 0; i < Scene.objects.length; i++){
+
+          var object = Scene.objects[i];
+    if (object.visible != undefined && !object.visible) continue;
+    this.transforms.calculateModelView();
+    this.transforms.push();
+    if (object.alias == 'cube') {
+      var cube  = this.transforms.mvMatrix;
+      mat4.translate(cube,[1,1,0]);
     }
-  };
 
-  Aubengine.prototype.changeColor = function(color) {
-    if (this.isStarted()) {
-      this.gl.clearColor(color[0], color[1], color[2], color[3]);
-      this.clear(this.gl);
-    }
-  };
+    this.transforms.setMatrixUniforms();
+    this.transforms.pop();
+          gl.enableVertexAttribArray(Program.aVertexPosition);
+          gl.disableVertexAttribArray(Program.aVertexNormal);
+          gl.disableVertexAttribArray(Program.aVertexColor);
 
-  Aubengine.prototype.scale = function(gl, x, y, z, matrix) {
-    this.transform.scale(gl, x, y, z, matrix);
-  };
+          gl.uniform1i(Program.uWireframe, false);
+          gl.uniform3fv(Program.uKa, object.Ka);
+          gl.uniform3fv(Program.uKd, object.Kd);
+          gl.uniform3fv(Program.uKs, object.Ks);
+          gl.uniform1f(Program.uNs, object.Ns);
+          gl.uniform1f(Program.d, object.d);
+          gl.uniform1i(Program.illum, object.illum);
 
-  /* TODO */
-  //all the façade methods for transformations and lights and cameras
+         if(object.d < 1.0){  //tweaking parameters here
+               gl.uniform1f(Program.d, 0.14);
+              }
+
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
+          gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
+          gl.enableVertexAttribArray(Program.aVertexPosition);
+
+    if(!object.wireframe){
+      gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
+      gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(Program.aVertexNormal);
+          }
+          else{
+              gl.uniform1i(Program.uWireframe, true);
+          }
+
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, object.ibo);
+
+    if (object.wireframe){
+              gl.drawElements(gl.LINES, object.indices.length, gl.UNSIGNED_SHORT,0);
+          }
+          else{
+              gl.drawElements(gl.TRIANGLES, object.indices.length, gl.UNSIGNED_SHORT,0);
+          }
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, null);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+      } //end for
+  }
+  catch(err){
+      alert(err);
+      console.error(err.description);
+  }
+}
+
+Aubengine.prototype.start = function() {
+        WEBGLAPP_RENDER = this.draw;
+        renderLoop();
+ }
+
+Aubengine.prototype.refresh = function(){
+    if (WEBGLAPP_RENDER) WEBGLAPP_RENDER(false);
+ }
+
+renderLoop = function(){
+     WEBGLAPP_TIMER_ID = setInterval(WEBGLAPP_RENDER, WEBGLAPP_RENDER_RATE);
+}
+
+window.onblur = function(){
+    clearInterval(WEBGLAPP_TIMER_ID);
+    console.info('Rendering stopped');
+}
+
+window.onfocus = function(){
+    renderLoop();
+    console.info('Rendering resumed');
+}
