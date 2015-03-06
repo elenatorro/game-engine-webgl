@@ -43,6 +43,16 @@ var c_height = 0;
 var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
 var interactor = null;
 
+function resizeCanvas(){
+    c_width = $('#content').width();
+    c_height = $('#content').height();
+    $('#the-canvas').attr('width',c_width);
+    $('#the-canvas').attr('height',c_height);
+    if (aubengine) aubengine.draw();
+}
+
+$(window).resize(function(){resizeCanvas();});
+
 var	Configuration = {
 
 	getGLContext : function(name, width, height){
@@ -497,13 +507,19 @@ function Mesh(filename, alias) {
   this.ibo = null;
   this.vbo = null;
   this.remote = null;
-  this.Ni = null;
-  this.Ka = null;
-  this.d = null;
-  this.Kd = null;
-  this.illum = null;
-  this.Ks = null;
-  this.Ns = null;
+
+  //default values
+  this.Ni = 1.00000;
+  this.Ka = [0.00000,0.00000,0.00000]; //color ambient
+  this.d = 1.00000;
+  this.Kd = [0.8,0.80842,0.64000]; //color diffuse
+  this.illum = 2;
+  this.Ks = [0.94944,0.94944,0.94944]; //color specular
+  this.Ns = 96.07843;
+
+  this.position = null;
+  this.size     = null;
+  this.rotation = null;
 }
 
 Mesh.prototype.getAlias = function() {
@@ -514,8 +530,114 @@ Mesh.prototype.getFilename = function() {
   return this.filename;
 };
 
-Mesh.prototype.draw = function() {
-  console.log('mesh faking drawing');
+Mesh.prototype.getPosition = function() {
+  return this.position;
+};
+
+Mesh.prototype.setPosition = function(position) {
+  this.position = position;
+};
+
+Mesh.prototype.getRotation = function() {
+  return this.rotation;
+};
+
+Mesh.prototype.setRotation = function(rotation) {
+  this.rotation = rotation;
+};
+
+Mesh.prototype.setSize = function(size) {
+  this.size = size;
+};
+
+Mesh.prototype.getSize = function() {
+  return this.size;
+};
+
+Mesh.prototype.getAttributes = function() {
+  var attributes = {
+    "Ni" : this.Ni,
+    "Ka" : this.Ka,
+    "d"  : this.d,
+    "Kd" : this.Kd,
+    "illum" : this.illum,
+    "Ks" : this.Ks,
+    "Ns" : this.Ns
+  };
+  return attributes;
+};
+
+Mesh.prototype.draw = function(transforms) {
+  try{
+    console.log(transforms)
+    var object = Scene.getObject(this.getAlias());
+    transforms.calculateModelView();
+    transforms.push();
+
+    //add transformations
+    if (this.getPosition()!=null) {
+      var mv = transforms.mvMatrix;
+      mat4.translate(mv, this.getPosition());
+    };
+
+    if (this.getSize()!=null) {
+      var mv = transforms.mvMatrix;
+      mat4.scale(mv, this.getSize());
+    };
+
+    if (this.getRotation()!=null) {
+      
+    };
+
+    transforms.setMatrixUniforms();
+    transforms.pop();
+          gl.enableVertexAttribArray(Program.aVertexPosition);
+          gl.disableVertexAttribArray(Program.aVertexNormal);
+          gl.disableVertexAttribArray(Program.aVertexColor);
+
+          gl.uniform1i(Program.uWireframe, false);
+          gl.uniform3fv(Program.uKa, object.Ka);
+          gl.uniform3fv(Program.uKd, object.Kd);
+          gl.uniform3fv(Program.uKs, object.Ks);
+          gl.uniform1f(Program.uNs, object.Ns);
+          gl.uniform1f(Program.d, object.d);
+          gl.uniform1i(Program.illum, object.illum);
+
+         if(object.d < 1.0){  //tweaking parameters here
+               gl.uniform1f(Program.d, 0.14);
+              }
+
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
+          gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
+          gl.enableVertexAttribArray(Program.aVertexPosition);
+
+    if(!object.wireframe){
+      gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
+      gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(Program.aVertexNormal);
+          }
+          else{
+              gl.uniform1i(Program.uWireframe, true);
+          }
+
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, object.ibo);
+
+    if (object.wireframe){
+              gl.drawElements(gl.LINES, object.indices.length, gl.UNSIGNED_SHORT,0);
+          }
+          else{
+              gl.drawElements(gl.TRIANGLES, object.indices.length, gl.UNSIGNED_SHORT,0);
+          }
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, null);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+  }
+  catch(err){
+      alert(err);
+      console.error(err.description);
+    }
 };
 
 var Scene = {
@@ -746,6 +868,53 @@ var Floor = {
 
 
 
+
+'use strict';
+
+function Color(hex) {
+    this.hex  = hex || '#FFFFFF';
+    this.rgba = null;
+    this.vec  = null;
+  }
+
+  Color.prototype.hex2rgb = function(hex, opacity) {
+    var hexStr = hex.replace('#','');
+    var r = parseInt(hexStr.substring(0,2), 16);
+    var g = parseInt(hexStr.substring(2,4), 16);
+    var b = parseInt(hexStr.substring(4,6), 16);
+    return [r/255,g/255,b/255,opacity];
+  };
+
+  Color.prototype.rgb2hex = function(rgb) {
+   return "#" +
+    ("0" + parseInt(rgb[0],10).toString(16)).slice(-2) +
+    ("0" + parseInt(rgb[1],10).toString(16)).slice(-2) +
+    ("0" + parseInt(rgb[2],10).toString(16)).slice(-2);
+  }
+
+  Color.prototype.setColorRgba = function(r,g,b,a) {
+    this.rgba     = [r,g,b, a || 1];
+    this.hex      = this.rgb2hex(this.rgba);
+    this.vec      = vec4(r,g,b,a);
+  }
+
+  Color.prototype.setColorHex = function(hex, opacity) {
+    this.hex      = hex;
+    this.rgba     = this.hex2rgb(hex, opacity || 1);
+    this.vec      = vec4(this.rgba[0],this.rgba[1],this.rgba[2],this.rgba[3]);
+  }
+
+  Color.prototype.getHex  = function() {
+    return this.hex;
+  };
+
+  Color.prototype.getRgba = function() {
+    return this.hex2rgb(this.hex, 1);
+  };
+
+  Color.prototype.getVec  = function() {
+    return this.vec;
+  };
 
 var CAMERA_ORBITING_TYPE = 1;
 var CAMERA_TRACKING_TYPE = 2;
@@ -1301,15 +1470,17 @@ function NodeTree(entity, father, children) {
     return (this.children.indexOf(child) != -1);
   };
 
-  NodeTree.prototype.draw = function(gl, program) {
+  NodeTree.prototype.draw = function() {
     if (this.entity) {
-      console.log(this.entity);
-      this.entity.beginDraw(gl, program);
-      this.entity.endDraw();
+      this.entity.draw();
     } else {
       console.log('There is no entity for this node');
     }
   };
+
+  NodeTree.prototype.endDraw = function() {
+
+  }
 
 'use strict';
 
@@ -1321,31 +1492,34 @@ function NodeTree(entity, father, children) {
     return this.root;
   };
 
-  Tree.prototype.preorder = function(node) {
+  Tree.prototype.preorder = function(node, transforms) {
     if (node == null) return;
-    if (node.getEntity() instanceof Mesh) node.draw();
-    this.preorder(node.firstChild());
-    this.preorder(node.nextSibling());
+    console.log(transforms);
+    if (node.getEntity() instanceof Mesh) node.getEntity().draw(transforms);
+    this.preorder(node.firstChild(), transforms);
+    this.preorder(node.nextSibling(), transforms);
   };
 
-  Tree.prototype.save = function(node, scene) {
+  Tree.prototype.save = function(node) {
     if (node == null) return;
     if (node.getEntity() instanceof Light) Lights.add(node.getEntity());
     else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity());
     else if (node.getEntity() instanceof Mesh) {
-      Scene.loadObject(node.getEntity().getFilename(), node.getEntity().getAlias());
+      Scene.loadObject(node.getEntity().getFilename(),
+                       node.getEntity().getAlias(),
+                       node.getEntity().getAttributes());
     };
-    this.save(node.firstChild(), scene);
-    this.save(node.nextSibling(),scene);
+    this.save(node.firstChild());
+    this.save(node.nextSibling());
   };
 
-  Tree.prototype.draw = function() {
-    this.preorder(this.getRoot().firstChild());
+  Tree.prototype.draw = function(transforms) {
+    this.preorder(this.getRoot().firstChild(), transforms);
   };
 
-  Tree.prototype.saveEntities = function() {
+  Tree.prototype.saveEntities = function(aubengine) {
     this.save(this.getRoot().firstChild());
-  }
+  };
 
 var WEBGLAPP_RENDER      = undefined;
 var WEBGLAPP_TIMER_ID    = -1;
@@ -1415,9 +1589,9 @@ Aubengine.prototype.createMesh = function(filename, alias) {
   return mesh;
 };
 
-Aubengine.prototype.addModel = function(filename, alias, attributes, callback) {
-  Scene.loadObject(filename,alias,attributes,callback); //drawing
-};
+// Aubengine.prototype.addModel = function(filename, alias, attributes, callback) {
+//   Scene.loadObject(filename,alias,attributes,callback); //drawing
+// };
 
 Aubengine.prototype.addFloor = function(visible) {
   Floor.build(80,2);
@@ -1440,7 +1614,6 @@ Aubengine.prototype.createLight = function(name, position, diffuse, ambient, spe
         light.setDiffuse(diffuse);
         light.setAmbient(ambient);
         light.setSpecular(specular);
-        //Lights.add(light);
       }
 
       return light;
@@ -1454,76 +1627,16 @@ Aubengine.prototype.createNode = function(entity) {
   var node = new NodeTree(entity);
   return node;
 };
-//needs to be refactored
+
+
 Aubengine.prototype.draw = function() {
   this.loadProgram(false);
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   this.transforms.updatePerspective();
 
-  try{
-      for (var i = 0; i < Scene.objects.length; i++){
-
-          var object = Scene.objects[i];
-    if (object.visible != undefined && !object.visible) continue;
-    this.transforms.calculateModelView();
-    this.transforms.push();
-    if (object.alias == 'cube') {
-      var cube  = this.transforms.mvMatrix;
-      mat4.translate(cube,[1,1,0]);
-    }
-
-    this.transforms.setMatrixUniforms();
-    this.transforms.pop();
-          gl.enableVertexAttribArray(Program.aVertexPosition);
-          gl.disableVertexAttribArray(Program.aVertexNormal);
-          gl.disableVertexAttribArray(Program.aVertexColor);
-
-          gl.uniform1i(Program.uWireframe, false);
-          gl.uniform3fv(Program.uKa, object.Ka);
-          gl.uniform3fv(Program.uKd, object.Kd);
-          gl.uniform3fv(Program.uKs, object.Ks);
-          gl.uniform1f(Program.uNs, object.Ns);
-          gl.uniform1f(Program.d, object.d);
-          gl.uniform1i(Program.illum, object.illum);
-
-         if(object.d < 1.0){  //tweaking parameters here
-               gl.uniform1f(Program.d, 0.14);
-              }
-
-
-          gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
-          gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
-          gl.enableVertexAttribArray(Program.aVertexPosition);
-
-    if(!object.wireframe){
-      gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
-      gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
-      gl.enableVertexAttribArray(Program.aVertexNormal);
-          }
-          else{
-              gl.uniform1i(Program.uWireframe, true);
-          }
-
-          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, object.ibo);
-
-    if (object.wireframe){
-              gl.drawElements(gl.LINES, object.indices.length, gl.UNSIGNED_SHORT,0);
-          }
-          else{
-              gl.drawElements(gl.TRIANGLES, object.indices.length, gl.UNSIGNED_SHORT,0);
-          }
-
-          gl.bindBuffer(gl.ARRAY_BUFFER, null);
-          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-
-      } //end for
-  }
-  catch(err){
-      alert(err);
-      console.error(err.description);
-  }
-}
+  this.tree.draw(this.transforms);
+ }
 
 Aubengine.prototype.start = function() {
         WEBGLAPP_RENDER = this.draw;
