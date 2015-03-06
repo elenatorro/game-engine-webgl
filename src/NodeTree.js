@@ -83,12 +83,14 @@ function NodeTree(entity, father, children) {
     return (this.children.indexOf(child) != -1);
   };
 
-  NodeTree.prototype.draw = function(gl, program) {
+  NodeTree.prototype.draw = function() {
     if (this.entity) {
-      console.log(this.entity);
-      this.entity.beginDraw(gl, program);
-      this.entity.endDraw();
+      this.entity.draw();
     } else {
       console.log('There is no entity for this node');
     }
   };
+
+  NodeTree.prototype.endDraw = function() {
+
+  }
