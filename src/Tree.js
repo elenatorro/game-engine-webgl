@@ -10,7 +10,6 @@
 
   Tree.prototype.preorder = function(node, transforms) {
     if (node == null) return;
-    console.log(transforms);
     if (node.getEntity() instanceof Mesh) node.getEntity().draw(transforms);
     this.preorder(node.firstChild(), transforms);
     this.preorder(node.nextSibling(), transforms);
