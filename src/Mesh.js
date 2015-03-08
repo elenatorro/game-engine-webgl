@@ -42,6 +42,10 @@ Mesh.prototype.getFilename = function() {
   return this.filename;
 };
 
+Mesh.prototype.setSpecularColor = function(r,g,b) {
+  this.Kd = Color.rgb2decimal(r,g,b);
+}
+
 Mesh.prototype.getPosition = function() {
   return this.position;
 };
@@ -81,7 +85,6 @@ Mesh.prototype.getAttributes = function() {
 
 Mesh.prototype.draw = function(transforms) {
   try{
-    console.log(transforms)
     var object = Scene.getObject(this.getAlias());
     transforms.calculateModelView();
     transforms.push();
@@ -98,7 +101,7 @@ Mesh.prototype.draw = function(transforms) {
     };
 
     if (this.getRotation()!=null) {
-      
+
     };
 
     transforms.setMatrixUniforms();
