@@ -2,7 +2,6 @@ var CAMERA_ORBITING_TYPE = 1;
 var CAMERA_TRACKING_TYPE = 2;
 
 function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
-
     //default parameters
     this.alias      = alias;
     this.matrix     = mat4.create();
@@ -102,11 +101,11 @@ Camera.prototype.changeAzimuth = function(az){
     c.update();
 }
 
-Camera.prototype.setElevation = function(el){
+Camera.prototype.setElevation = function(el) {
     this.changeElevation(el - this.elevation);
 }
 
-Camera.prototype.changeElevation = function(el){
+Camera.prototype.changeElevation = function(el) {
     var c = this;
 
     c.elevation +=el;
@@ -154,6 +153,7 @@ Camera.prototype.getViewTransform = function(){
     return m;
 };
 
+//draws the main camera
 Camera.prototype.draw = function() {
   this.goHome(this.tHome);
   this.setFocus(this.tFocus);
@@ -161,9 +161,17 @@ Camera.prototype.draw = function() {
   this.setElevation(this.tElevation);
 };
 
+Camera.prototype.beginDraw = function() {
+  this.draw();
+};
+
+Camera.prototype.endDraw = function() {
+  console.log('end of draw ' + this);
+}
+
 var Cameras = {
   list : [],
-  add : function(camera){
+  add : function(camera, position){
 		if (!(camera instanceof Camera)){
 			alert('the parameter is not a light');
 			return;
@@ -171,7 +179,7 @@ var Cameras = {
 		this.list.push(camera);
 	},
 
-	getArray: function(type){
+	getArray: function(type) {
 		var a = [];
 		for(var i = 0, max = this.list.length; i < max; i+=1){
 			a = a.concat(this.list[i][type]);

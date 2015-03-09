@@ -8,7 +8,7 @@ var Scene = {
         return null;
     },
 
-    loadObject : function(filename,alias,attributes,callback) {
+    loadObject : function(filename,alias,attributes,aubengine) {
         var request = new XMLHttpRequest();
         console.info('Requesting ' + filename);
         request.open("GET",filename);
@@ -22,7 +22,7 @@ var Scene = {
                     var o = JSON.parse(request.responseText);
                     o.alias = (alias==null)?'none':alias;
                     o.remote = true;
-                    Scene.addObject(o,attributes,callback);
+                    Scene.addObject(o,attributes,aubengine);
                 }
             }
         }
@@ -37,7 +37,7 @@ var Scene = {
         }
     },
 
-    addObject : function(object, attributes, callback) {
+    addObject : function(object, attributes, aubengine) {
 
         //deffault object light
         if (object.wireframe        === undefined)    {   object.wireframe        = false;            }
@@ -105,11 +105,9 @@ var Scene = {
             console.info(object.alias + ' has been added to the scene [Local]');
          }
 
-		 if (callback != undefined){
-			callback(object);
+		 if (aubengine != undefined){
+			aubengine.draw();
 		 }
-
-     console.log(this.objects);
     },
 
 
