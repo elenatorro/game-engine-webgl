@@ -42,6 +42,7 @@ var c_width = 0;
 var c_height = 0;
 var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
 var interactor = null;
+var transforms = null;
 
 function resizeCanvas(){
     c_width = $('#content').width();
@@ -209,30 +210,65 @@ requestAnimFrame = (function() {
          };
 })();
 
+'use strict'
+
+function Transformation(name, position, size, rotation) {
+  this.name = name;
+  this.mv = null;
+  this.position = position || [0,0,0];
+  this.size = size || [1,1,1];
+};
+
+Transformation.prototype.getPosition = function() {
+  return this.position;
+}
+
+Transformation.prototype.beginDraw = function() {
+  transforms.calculateModelView(); //calcula la matriz actual
+  transforms.push(); //apila
+  this.mv = transforms.mvMatrix; //hace una copia
+  //TODO add rotation
+  if (this.position!=null) {
+    mat4.translate(this.mv, this.position);
+  };
+
+  if (this.size=null) {
+    mat4.scale(this.mv, this.size);
+  };
+
+  transforms.setMatrixUniforms();
+  this.endDraw();
+};
+
+Transformation.prototype.endDraw = function() {
+  transforms.pop();
+}
+
 function Light(name){
 	this.id = name;
 	this.position = [0.0,0.0,0.0];
-	this.ambient = [0.0,0.0,0.0,0.0];
-	this.diffuse = [0.0,0.0,0.0,0.0];
+	this.ambient  = [0.0,0.0,0.0,0.0];
+	this.diffuse  = [0.0,0.0,0.0,0.0];
 	this.specular = [0.0,0.0,0.0,0.0];
 }
 
-Light.prototype.setPosition = function(p){
+Light.prototype.setPosition = function(p) {
 	this.position = p.slice(0);
-}
-Light.prototype.setDiffuse = function (d){
+};
+
+Light.prototype.setDiffuse = function (d) {
 	this.diffuse = d.slice(0);
 }
 
-Light.prototype.setAmbient = function(a){
+Light.prototype.setAmbient = function(a) {
 	this.ambient = a.slice(0);
 }
 
-Light.prototype.setSpecular = function(s){
+Light.prototype.setSpecular = function(s) {
 	this.specular = s.slice(0);
 }
 
-Light.prototype.setProperty = function(pName, pValue){
+Light.prototype.setProperty = function(pName, pValue) {
 	if(typeof pName == 'string'){
 		if (pValue instanceof Array){
 			this[pName] = pValue.slice(0);
@@ -244,15 +280,16 @@ Light.prototype.setProperty = function(pName, pValue){
 	else{
 		throw 'The property name must be a string';
 	}
-}
+};
 
 var Lights = {
 	list : [],
-	add : function(light){
+	add : function(light, position){
 		if (!(light instanceof Light)){
 			alert('the parameter is not a light');
 			return;
 		}
+		light.setPosition(position);
 		this.list.push(light);
 	},
 
@@ -282,6 +319,23 @@ var Lights = {
 	setNumLights: function() {
 		if (this.list.length <= 0) return 4
 		else return this.list.length
+	},
+
+	//draws all the lights
+	draw: function() {
+		//lights uniform vector, uses PHONG
+		gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
+		gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));
+		gl.uniform3fv(Program.uLd, Lights.getArray('diffuse'));
+		gl.uniform3fv(Program.uLs, Lights.getArray('specular'));
+
+		//object properties uniform vector
+		gl.uniform3fv(Program.uKa, [1.0,1.0,1.0]);
+		gl.uniform3fv(Program.uKd, [1.0,1.0,1.0]);
+		gl.uniform3fv(Program.uKs, [1.0,1.0,1.0]);
+
+		gl.uniform1f(Program.uNs, 1.0);
+		gl.uniform1i(Program.uTranslateLights, true);
 	}
 }
 
@@ -571,29 +625,30 @@ Mesh.prototype.getAttributes = function() {
   return attributes;
 };
 
-Mesh.prototype.draw = function(transforms) {
+Mesh.prototype.draw = function(father) {
   try{
     var object = Scene.getObject(this.getAlias());
-    transforms.calculateModelView();
-    transforms.push();
-
-    //add transformations
-    if (this.getPosition()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.translate(mv, this.getPosition());
-    };
-
-    if (this.getSize()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.scale(mv, this.getSize());
-    };
-
-    if (this.getRotation()!=null) {
-
-    };
-
-    transforms.setMatrixUniforms();
-    transforms.pop();
+    // transforms.calculateModelView();
+    // transforms.push();
+    //
+    // //add transformations
+    // //TODO
+    // if (this.getPosition()!=null) {
+    //   var mv = transforms.mvMatrix;
+    //   mat4.translate(mv, this.getPosition());
+    // };
+    //
+    // if (this.getSize()!=null) {
+    //   var mv = transforms.mvMatrix;
+    //   mat4.scale(mv, this.getSize());
+    // };
+    //
+    // if (this.getRotation()!=null) {
+    //
+    // };
+    //
+    // transforms.setMatrixUniforms();
+    // transforms.pop();
           gl.enableVertexAttribArray(Program.aVertexPosition);
           gl.disableVertexAttribArray(Program.aVertexNormal);
           gl.disableVertexAttribArray(Program.aVertexColor);
@@ -609,7 +664,6 @@ Mesh.prototype.draw = function(transforms) {
          if(object.d < 1.0){  //tweaking parameters here
                gl.uniform1f(Program.d, 0.14);
               }
-
 
           gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
           gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
@@ -638,9 +692,17 @@ Mesh.prototype.draw = function(transforms) {
 
   }
   catch(err){
-      alert(err);
+      // alert(err);
       console.error(err.description);
     }
+};
+
+Mesh.prototype.beginDraw = function() {
+  this.draw();
+}
+
+Mesh.prototype.endDraw = function() {
+  console.log('end draw ' + this);
 };
 
 var Scene = {
@@ -653,7 +715,7 @@ var Scene = {
         return null;
     },
 
-    loadObject : function(filename,alias,attributes,callback) {
+    loadObject : function(filename,alias,attributes,aubengine) {
         var request = new XMLHttpRequest();
         console.info('Requesting ' + filename);
         request.open("GET",filename);
@@ -667,7 +729,7 @@ var Scene = {
                     var o = JSON.parse(request.responseText);
                     o.alias = (alias==null)?'none':alias;
                     o.remote = true;
-                    Scene.addObject(o,attributes,callback);
+                    Scene.addObject(o,attributes,aubengine);
                 }
             }
         }
@@ -682,7 +744,7 @@ var Scene = {
         }
     },
 
-    addObject : function(object, attributes, callback) {
+    addObject : function(object, attributes, aubengine) {
 
         //deffault object light
         if (object.wireframe        === undefined)    {   object.wireframe        = false;            }
@@ -750,11 +812,9 @@ var Scene = {
             console.info(object.alias + ' has been added to the scene [Local]');
          }
 
-		 if (callback != undefined){
-			callback(object);
+		 if (aubengine != undefined){
+			aubengine.draw();
 		 }
-
-     console.log(this.objects);
     },
 
 
@@ -899,7 +959,6 @@ var CAMERA_ORBITING_TYPE = 1;
 var CAMERA_TRACKING_TYPE = 2;
 
 function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
-
     //default parameters
     this.alias      = alias;
     this.matrix     = mat4.create();
@@ -999,11 +1058,11 @@ Camera.prototype.changeAzimuth = function(az){
     c.update();
 }
 
-Camera.prototype.setElevation = function(el){
+Camera.prototype.setElevation = function(el) {
     this.changeElevation(el - this.elevation);
 }
 
-Camera.prototype.changeElevation = function(el){
+Camera.prototype.changeElevation = function(el) {
     var c = this;
 
     c.elevation +=el;
@@ -1051,6 +1110,7 @@ Camera.prototype.getViewTransform = function(){
     return m;
 };
 
+//draws the main camera
 Camera.prototype.draw = function() {
   this.goHome(this.tHome);
   this.setFocus(this.tFocus);
@@ -1058,9 +1118,17 @@ Camera.prototype.draw = function() {
   this.setElevation(this.tElevation);
 };
 
+Camera.prototype.beginDraw = function() {
+  this.draw();
+};
+
+Camera.prototype.endDraw = function() {
+  console.log('end of draw ' + this);
+}
+
 var Cameras = {
   list : [],
-  add : function(camera){
+  add : function(camera, position){
 		if (!(camera instanceof Camera)){
 			alert('the parameter is not a light');
 			return;
@@ -1068,7 +1136,7 @@ var Cameras = {
 		this.list.push(camera);
 	},
 
-	getArray: function(type){
+	getArray: function(type) {
 		var a = [];
 		for(var i = 0, max = this.list.length; i < max; i+=1){
 			a = a.concat(this.list[i][type]);
@@ -1308,7 +1376,7 @@ function SceneTransforms(c){
 };
 
 
-SceneTransforms.prototype.calculateModelView = function(){
+SceneTransforms.prototype.calculateModelView = function() {
 	this.mvMatrix = this.camera.getViewTransform();
 };
 
@@ -1338,14 +1406,7 @@ SceneTransforms.prototype.updatePerspective = function(){
 };
 
 
-/**
-* Maps the matrices to shader matrix uniforms
-*
-* Called once per rendering cycle.
-*/
-
-
-SceneTransforms.prototype.setMatrixUniforms = function(){
+SceneTransforms.prototype.setMatrixUniforms = function() {
 	this.calculateNormal();
     gl.uniformMatrix4fv(Program.uMVMatrix, false, this.mvMatrix);
     gl.uniformMatrix4fv(Program.uPMatrix, false, this.pMatrix);
@@ -1353,13 +1414,13 @@ SceneTransforms.prototype.setMatrixUniforms = function(){
 };
 
 
-SceneTransforms.prototype.push = function(){
+SceneTransforms.prototype.push = function() {
 	var memento =  mat4.create();
 	mat4.set(this.mvMatrix, memento);
 	this.stack.push(memento);
 };
 
-SceneTransforms.prototype.pop = function(){
+SceneTransforms.prototype.pop = function() {
 	if(this.stack.length == 0) return;
 	this.mvMatrix  =  this.stack.pop();
 };
@@ -1471,32 +1532,41 @@ function NodeTree(entity, father, children) {
     return this.root;
   };
 
-  Tree.prototype.preorder = function(node, transforms) {
+  Tree.prototype.drawPreorder = function(node) {
     if (node == null) return;
-    if (node.getEntity() instanceof Mesh) node.getEntity().draw(transforms);
-    this.preorder(node.firstChild(), transforms);
-    this.preorder(node.nextSibling(), transforms);
+    if (node.getEntity() instanceof Mesh) node.getEntity().beginDraw();
+    else if (node.getEntity() instanceof Transformation) node.getEntity().beginDraw();
+    this.drawPreorder(node.firstChild());
+    this.drawPreorder(node.nextSibling());
+
+    // if (node == null) return;
+    // node.getEntity().beginDraw();
+    // node.getChildren().forEach(function(child) {
+    //   child.getEntity().beginDraw();
+    // });
+    // node.getEntity().endDraw();
   };
 
-  Tree.prototype.save = function(node) {
+  Tree.prototype.save = function(node, aubengine) {
     if (node == null) return;
-    if (node.getEntity() instanceof Light) Lights.add(node.getEntity());
+    if (node.getEntity() instanceof Light) Lights.add(node.getEntity(), node.getFather().getEntity().getPosition());
     else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity());
     else if (node.getEntity() instanceof Mesh) {
       Scene.loadObject(node.getEntity().getFilename(),
                        node.getEntity().getAlias(),
-                       node.getEntity().getAttributes());
+                       node.getEntity().getAttributes(), aubengine);
     };
-    this.save(node.firstChild());
-    this.save(node.nextSibling());
+    this.save(node.firstChild(), aubengine);
+    this.save(node.nextSibling(), aubengine);
   };
 
-  Tree.prototype.draw = function(transforms) {
-    this.preorder(this.getRoot().firstChild(), transforms);
+  Tree.prototype.draw = function() {
+    this.drawPreorder(this.getRoot().firstChild());
   };
 
-  Tree.prototype.saveEntities = function(aubengine) {
-    this.save(this.getRoot().firstChild());
+  Tree.prototype.saveEntities = function(draw) {
+    this.save(this.getRoot().firstChild(), draw);
+
   };
 
 var WEBGLAPP_RENDER      = undefined;
@@ -1505,11 +1575,12 @@ var WEBGLAPP_RENDER_RATE = 16;
 
 function Aubengine(canvas, tree) {
     this.interactor = null; //the camera interactor
-    this.transforms = null; //object transformations
+    this.transforms = null;
     this.tree       = new Tree();
 
     gl = Configuration.getGLContext(canvas); //clobal context
 
+    this.camera = null;
     this.canvas = canvas;
 }
 
@@ -1520,6 +1591,10 @@ Aubengine.prototype.getTree = function() {
 Aubengine.prototype.getRoot = function() {
   return this.tree.getRoot();
 };
+
+Aubengine.prototype.getTransforms = function() {
+  return this.transforms;
+}
 
 Aubengine.prototype.setUpEnvironment = function () {
   gl.clearColor(56/255,161/255,172/255, 1.0);
@@ -1537,29 +1612,18 @@ Aubengine.prototype.createCamera = function(alias, home, focus, azimuth, elevati
 };
 
 Aubengine.prototype.setMainCamera = function(camera) {
-  camera.draw(); //provisional
+  this.camera     = camera;
   this.interactor = new CameraInteractor(camera, this.canvas);
   this.transforms = new SceneTransforms(camera);
-  this.transforms.init();       //global transforms
-  interactor = this.interactor; //global interactor
-}
+
+  transforms = this.transforms;
+  interactor = this.interactor;
+  transforms.init();
+
+};
 
 Aubengine.prototype.loadProgram = function(translateLights) {
   Program.load();
-
-  //lights uniform vector, uses PHONG
-  gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
-  gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));
-  gl.uniform3fv(Program.uLd, Lights.getArray('diffuse'));
-  gl.uniform3fv(Program.uLs, Lights.getArray('specular'));
-
-  //object properties uniform vector
-  gl.uniform3fv(Program.uKa, [1.0,1.0,1.0]);
-  gl.uniform3fv(Program.uKd, [1.0,1.0,1.0]);
-  gl.uniform3fv(Program.uKs, [1.0,1.0,1.0]);
-
-  gl.uniform1f(Program.uNs, 1.0);
-  gl.uniform1i(Program.uTranslateLights, translateLights || false);
 }
 
 Aubengine.prototype.createMesh = function(filename, alias) {
@@ -1567,9 +1631,6 @@ Aubengine.prototype.createMesh = function(filename, alias) {
   return mesh;
 };
 
-// Aubengine.prototype.addModel = function(filename, alias, attributes, callback) {
-//   Scene.loadObject(filename,alias,attributes,callback); //drawing
-// };
 
 Aubengine.prototype.addFloor = function(visible) {
   Floor.build(80,2);
@@ -1583,18 +1644,23 @@ Aubengine.prototype.addFloor = function(visible) {
   Floor.visible = visible;
 };
 
-Aubengine.prototype.createLight = function(name, position, diffuse, ambient, specular) {
-      if ((name == null) || (position == null) || (diffuse == null) || (ambient == null) || (specular == null)) {
+Aubengine.prototype.createLight = function(name, diffuse, ambient, specular) {
+      if ((name == null) || (diffuse == null) || (ambient == null) || (specular == null)) {
         alert('Light can not be created! Wrong parameters.');
       } else {
         var light = new Light(name);
-        light.setPosition(position);
+        // light.setPosition(position);
         light.setDiffuse(diffuse);
         light.setAmbient(ambient);
         light.setSpecular(specular);
-      }
+      };
 
       return light;
+};
+
+Aubengine.prototype.createTransformation = function(name, position, size) {
+  var transformation = new Transformation(name, position, size);
+  return transformation;
 };
 
 Aubengine.prototype.addNode = function(father, node) {
@@ -1603,6 +1669,7 @@ Aubengine.prototype.addNode = function(father, node) {
 
 Aubengine.prototype.createNode = function(entity) {
   var node = new NodeTree(entity);
+  console.log(node);
   return node;
 };
 
@@ -1612,7 +1679,13 @@ Aubengine.prototype.draw = function() {
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   this.transforms.updatePerspective();
+  //1. draw lights
+  Lights.draw();
 
+  //2. draw main camera
+  this.camera.draw();
+
+  //3. draw the rest of the tree
   this.tree.draw(this.transforms);
  }
 

@@ -83,29 +83,30 @@ Mesh.prototype.getAttributes = function() {
   return attributes;
 };
 
-Mesh.prototype.draw = function(transforms) {
+Mesh.prototype.draw = function(father) {
   try{
     var object = Scene.getObject(this.getAlias());
-    transforms.calculateModelView();
-    transforms.push();
-
-    //add transformations
-    if (this.getPosition()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.translate(mv, this.getPosition());
-    };
-
-    if (this.getSize()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.scale(mv, this.getSize());
-    };
-
-    if (this.getRotation()!=null) {
-
-    };
-
-    transforms.setMatrixUniforms();
-    transforms.pop();
+    // transforms.calculateModelView();
+    // transforms.push();
+    //
+    // //add transformations
+    // //TODO
+    // if (this.getPosition()!=null) {
+    //   var mv = transforms.mvMatrix;
+    //   mat4.translate(mv, this.getPosition());
+    // };
+    //
+    // if (this.getSize()!=null) {
+    //   var mv = transforms.mvMatrix;
+    //   mat4.scale(mv, this.getSize());
+    // };
+    //
+    // if (this.getRotation()!=null) {
+    //
+    // };
+    //
+    // transforms.setMatrixUniforms();
+    // transforms.pop();
           gl.enableVertexAttribArray(Program.aVertexPosition);
           gl.disableVertexAttribArray(Program.aVertexNormal);
           gl.disableVertexAttribArray(Program.aVertexColor);
@@ -121,7 +122,6 @@ Mesh.prototype.draw = function(transforms) {
          if(object.d < 1.0){  //tweaking parameters here
                gl.uniform1f(Program.d, 0.14);
               }
-
 
           gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
           gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
@@ -150,7 +150,15 @@ Mesh.prototype.draw = function(transforms) {
 
   }
   catch(err){
-      alert(err);
+      // alert(err);
       console.error(err.description);
     }
+};
+
+Mesh.prototype.beginDraw = function() {
+  this.draw();
+}
+
+Mesh.prototype.endDraw = function() {
+  console.log('end draw ' + this);
 };
