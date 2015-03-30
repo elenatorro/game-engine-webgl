@@ -63,7 +63,7 @@ gulp.task('watch', function() {
 gulp.task('connect', function () {
   connect.server({
     root: ['examples', './'],
-    port: 8000
+    port: 1058
   });
 });
 
