@@ -6,7 +6,7 @@ var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
 var interactor = null;
 var transforms = null;
 
-function resizeCanvas(){
+function resizeCanvas(aubengine){
     c_width = $('#content').width();
     c_height = $('#content').height();
     $('#the-canvas').attr('width',c_width);
