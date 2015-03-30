@@ -44,7 +44,7 @@ var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
 var interactor = null;
 var transforms = null;
 
-function resizeCanvas(){
+function resizeCanvas(aubengine){
     c_width = $('#content').width();
     c_height = $('#content').height();
     $('#the-canvas').attr('width',c_width);
@@ -217,6 +217,7 @@ function Transformation(name, position, size, rotation) {
   this.mv = null;
   this.position = position || [0,0,0];
   this.size = size || [1,1,1];
+  this.rotation = rotation || {angle: 0, axis: [0,0,0]};  //angle, axis
 };
 
 Transformation.prototype.getPosition = function() {
@@ -232,16 +233,21 @@ Transformation.prototype.beginDraw = function() {
     mat4.translate(this.mv, this.position);
   };
 
-  if (this.size=null) {
+  if (this.size!=null) {
     mat4.scale(this.mv, this.size);
   };
 
+  if (this.rotation!=null) {
+			mat4.rotate(this.mv,(this.rotation.angle*Math.PI/180),this.rotation.axis);
+  };
+
   transforms.setMatrixUniforms();
-  this.endDraw();
+  // this.endDraw();
 };
 
 Transformation.prototype.endDraw = function() {
   transforms.pop();
+  console.log('end draw ' + this.name)
 }
 
 function Light(name){
@@ -280,6 +286,14 @@ Light.prototype.setProperty = function(pName, pValue) {
 	else{
 		throw 'The property name must be a string';
 	}
+};
+
+Light.prototype.beginDraw = function() {
+	Lights.draw();
+};
+
+Light.prototype.endDraw = function() {
+	console.log('end draw ' + this.id);
 };
 
 var Lights = {
@@ -362,8 +376,8 @@ var Shaders = {
         + "   void main(void) {\n"
 
         + "        vec4 c = aVertexColor;\n"
-        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n"
-        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n"
+        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n" //coordenadas de vista
+        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n" //normal para la diferencia de vectores
         + "        vec4 lightPosition = vec4(0.0);\n"
 
         + "        if (uTranslateLights){ "
@@ -373,6 +387,7 @@ var Shaders = {
         + "              vEye[i] = -vec3(vertex.xyz);\n"
         + "            }\n"
         + "        }\n"
+
         + "        else {\n"
         + "           for(int i=0; i < NUM_LIGHTS; i++){\n"
         + "             lightPosition = vec4(uLightPosition[i], 1.0);\n"
@@ -380,7 +395,7 @@ var Shaders = {
         + "             vEye[i] = -vec3(vertex.xyz);\n"
         + "           }\n"
         + "       }\n"
-        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n"
+        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n" //pasa a 2D, multiplicando por el vertice original
         + "   }\n"
   },
 
@@ -586,7 +601,7 @@ Mesh.prototype.getFilename = function() {
 
 Mesh.prototype.setSpecularColor = function(r,g,b) {
   this.Kd = Color.rgb2decimal(r,g,b);
-}
+};
 
 Mesh.prototype.getPosition = function() {
   return this.position;
@@ -612,6 +627,10 @@ Mesh.prototype.getSize = function() {
   return this.size;
 };
 
+Mesh.prototype.setSpecular = function(value) {
+  this.Ns = value;
+};
+
 Mesh.prototype.getAttributes = function() {
   var attributes = {
     "Ni" : this.Ni,
@@ -628,46 +647,25 @@ Mesh.prototype.getAttributes = function() {
 Mesh.prototype.draw = function(father) {
   try{
     var object = Scene.getObject(this.getAlias());
-    // transforms.calculateModelView();
-    // transforms.push();
-    //
-    // //add transformations
-    // //TODO
-    // if (this.getPosition()!=null) {
-    //   var mv = transforms.mvMatrix;
-    //   mat4.translate(mv, this.getPosition());
-    // };
-    //
-    // if (this.getSize()!=null) {
-    //   var mv = transforms.mvMatrix;
-    //   mat4.scale(mv, this.getSize());
-    // };
-    //
-    // if (this.getRotation()!=null) {
-    //
-    // };
-    //
-    // transforms.setMatrixUniforms();
-    // transforms.pop();
-          gl.enableVertexAttribArray(Program.aVertexPosition);
-          gl.disableVertexAttribArray(Program.aVertexNormal);
-          gl.disableVertexAttribArray(Program.aVertexColor);
+    gl.enableVertexAttribArray(Program.aVertexPosition);
+    gl.disableVertexAttribArray(Program.aVertexNormal);
+    gl.disableVertexAttribArray(Program.aVertexColor);
 
-          gl.uniform1i(Program.uWireframe, false);
-          gl.uniform3fv(Program.uKa, object.Ka);
-          gl.uniform3fv(Program.uKd, object.Kd);
-          gl.uniform3fv(Program.uKs, object.Ks);
-          gl.uniform1f(Program.uNs, object.Ns);
-          gl.uniform1f(Program.d, object.d);
-          gl.uniform1i(Program.illum, object.illum);
+    gl.uniform1i(Program.uWireframe, false);
+    gl.uniform3fv(Program.uKa, object.Ka);
+    gl.uniform3fv(Program.uKd, object.Kd);
+    gl.uniform3fv(Program.uKs, object.Ks);
+    gl.uniform1f(Program.uNs, object.Ns);
+    gl.uniform1f(Program.d, object.d);
+    gl.uniform1i(Program.illum, object.illum);
 
-         if(object.d < 1.0){  //tweaking parameters here
-               gl.uniform1f(Program.d, 0.14);
-              }
+   if(object.d < 1.0){  //tweaking parameters here
+         gl.uniform1f(Program.d, 0.14);
+        }
 
-          gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
-          gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
-          gl.enableVertexAttribArray(Program.aVertexPosition);
+    gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
+    gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(Program.aVertexPosition);
 
     if(!object.wireframe){
       gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
@@ -702,7 +700,7 @@ Mesh.prototype.beginDraw = function() {
 }
 
 Mesh.prototype.endDraw = function() {
-  console.log('end draw ' + this);
+  console.log('end draw ' + this.alias);
 };
 
 var Scene = {
@@ -958,7 +956,7 @@ var Color = {
 var CAMERA_ORBITING_TYPE = 1;
 var CAMERA_TRACKING_TYPE = 2;
 
-function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
+function Camera(alias, t, tFocus, tAzimuth, tElevation) {
     //default parameters
     this.alias      = alias;
     this.matrix     = mat4.create();
@@ -974,7 +972,8 @@ function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
     this.home       = vec3.create();
 
     //update in drawing
-    this.tHome      = tHome;
+    // this.tHome      = tHome;
+    this.tHome      = vec3.create();
     this.tFocus     = tFocus;
     this.tAzimuth   = tAzimuth;
     this.tElevation = tElevation;
@@ -984,7 +983,7 @@ Camera.prototype.isMain = function() {
   return this.main;
 };
 
-Camera.prototype.setType = function(t){
+Camera.prototype.setType = function(t) {
 
     this.type = t;
 
@@ -992,7 +991,11 @@ Camera.prototype.setType = function(t){
         alert('Wrong Camera Type!. Setting Orbitting type by default');
         this.type = CAMERA_ORBITING_TYPE;
     }
-}
+};
+
+Camera.prototype.getAlias = function() {
+  return this.alias;
+};
 
 Camera.prototype.goHome = function(h) {
     if (h != null){
@@ -1034,8 +1037,13 @@ Camera.prototype.dolly = function(s){
     c.steps = s;
 }
 
+Camera.prototype.setHome = function(home) {
+  vec3.set(home, this.tHome);
+};
+
 Camera.prototype.setPosition = function(p){
     vec3.set(p, this.position);
+    vec3.set(p, this.tHome);
     this.update();
 }
 
@@ -1123,8 +1131,8 @@ Camera.prototype.beginDraw = function() {
 };
 
 Camera.prototype.endDraw = function() {
-  console.log('end of draw ' + this);
-}
+  console.log('end of draw ' + this.alias);
+};
 
 var Cameras = {
   list : [],
@@ -1133,6 +1141,8 @@ var Cameras = {
 			alert('the parameter is not a light');
 			return;
 		}
+    console.log("POSITIOOON " + position);
+    camera.setPosition(position);
 		this.list.push(camera);
 	},
 
@@ -1534,23 +1544,16 @@ function NodeTree(entity, father, children) {
 
   Tree.prototype.drawPreorder = function(node) {
     if (node == null) return;
-    if (node.getEntity() instanceof Mesh) node.getEntity().beginDraw();
-    else if (node.getEntity() instanceof Transformation) node.getEntity().beginDraw();
+    node.getEntity().beginDraw();
     this.drawPreorder(node.firstChild());
     this.drawPreorder(node.nextSibling());
-
-    // if (node == null) return;
-    // node.getEntity().beginDraw();
-    // node.getChildren().forEach(function(child) {
-    //   child.getEntity().beginDraw();
-    // });
-    // node.getEntity().endDraw();
+    node.getEntity().endDraw();
   };
 
   Tree.prototype.save = function(node, aubengine) {
     if (node == null) return;
     if (node.getEntity() instanceof Light) Lights.add(node.getEntity(), node.getFather().getEntity().getPosition());
-    else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity());
+    else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity(), node.getFather().getEntity().getPosition());
     else if (node.getEntity() instanceof Mesh) {
       Scene.loadObject(node.getEntity().getFilename(),
                        node.getEntity().getAlias(),
@@ -1606,8 +1609,8 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
 
-Aubengine.prototype.createCamera = function(alias, home, focus, azimuth, elevation) {
-  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, home, focus, azimuth, elevation);
+Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
+  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, focus, azimuth, elevation);
   return camera;
 };
 
@@ -1649,7 +1652,6 @@ Aubengine.prototype.createLight = function(name, diffuse, ambient, specular) {
         alert('Light can not be created! Wrong parameters.');
       } else {
         var light = new Light(name);
-        // light.setPosition(position);
         light.setDiffuse(diffuse);
         light.setAmbient(ambient);
         light.setSpecular(specular);
@@ -1658,8 +1660,8 @@ Aubengine.prototype.createLight = function(name, diffuse, ambient, specular) {
       return light;
 };
 
-Aubengine.prototype.createTransformation = function(name, position, size) {
-  var transformation = new Transformation(name, position, size);
+Aubengine.prototype.createTransformation = function(name, position, size, rotation) {
+  var transformation = new Transformation(name, position, size, rotation);
   return transformation;
 };
 
@@ -1679,13 +1681,6 @@ Aubengine.prototype.draw = function() {
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   this.transforms.updatePerspective();
-  //1. draw lights
-  Lights.draw();
-
-  //2. draw main camera
-  this.camera.draw();
-
-  //3. draw the rest of the tree
   this.tree.draw(this.transforms);
  }
 
