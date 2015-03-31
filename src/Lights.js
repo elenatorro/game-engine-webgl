@@ -36,6 +36,14 @@ Light.prototype.setProperty = function(pName, pValue) {
 	}
 };
 
+Light.prototype.beginDraw = function() {
+	Lights.draw();
+};
+
+Light.prototype.endDraw = function() {
+	console.log('end draw ' + this.id);
+};
+
 var Lights = {
 	list : [],
 	add : function(light, position){

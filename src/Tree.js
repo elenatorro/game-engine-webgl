@@ -10,23 +10,16 @@
 
   Tree.prototype.drawPreorder = function(node) {
     if (node == null) return;
-    if (node.getEntity() instanceof Mesh) node.getEntity().beginDraw();
-    else if (node.getEntity() instanceof Transformation) node.getEntity().beginDraw();
+    node.getEntity().beginDraw();
     this.drawPreorder(node.firstChild());
     this.drawPreorder(node.nextSibling());
-
-    // if (node == null) return;
-    // node.getEntity().beginDraw();
-    // node.getChildren().forEach(function(child) {
-    //   child.getEntity().beginDraw();
-    // });
-    // node.getEntity().endDraw();
+    node.getEntity().endDraw();
   };
 
   Tree.prototype.save = function(node, aubengine) {
     if (node == null) return;
     if (node.getEntity() instanceof Light) Lights.add(node.getEntity(), node.getFather().getEntity().getPosition());
-    else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity());
+    else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity(), node.getFather().getEntity().getPosition());
     else if (node.getEntity() instanceof Mesh) {
       Scene.loadObject(node.getEntity().getFilename(),
                        node.getEntity().getAlias(),

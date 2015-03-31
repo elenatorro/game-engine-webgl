@@ -35,8 +35,8 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
 
-Aubengine.prototype.createCamera = function(alias, home, focus, azimuth, elevation) {
-  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, home, focus, azimuth, elevation);
+Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
+  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, focus, azimuth, elevation);
   return camera;
 };
 
@@ -78,7 +78,6 @@ Aubengine.prototype.createLight = function(name, diffuse, ambient, specular) {
         alert('Light can not be created! Wrong parameters.');
       } else {
         var light = new Light(name);
-        // light.setPosition(position);
         light.setDiffuse(diffuse);
         light.setAmbient(ambient);
         light.setSpecular(specular);
@@ -87,8 +86,8 @@ Aubengine.prototype.createLight = function(name, diffuse, ambient, specular) {
       return light;
 };
 
-Aubengine.prototype.createTransformation = function(name, position, size) {
-  var transformation = new Transformation(name, position, size);
+Aubengine.prototype.createTransformation = function(name, position, size, rotation) {
+  var transformation = new Transformation(name, position, size, rotation);
   return transformation;
 };
 
@@ -108,13 +107,6 @@ Aubengine.prototype.draw = function() {
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   this.transforms.updatePerspective();
-  //1. draw lights
-  Lights.draw();
-
-  //2. draw main camera
-  this.camera.draw();
-
-  //3. draw the rest of the tree
   this.tree.draw(this.transforms);
  }
 

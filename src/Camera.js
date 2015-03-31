@@ -1,7 +1,7 @@
 var CAMERA_ORBITING_TYPE = 1;
 var CAMERA_TRACKING_TYPE = 2;
 
-function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
+function Camera(alias, t, tFocus, tAzimuth, tElevation) {
     //default parameters
     this.alias      = alias;
     this.matrix     = mat4.create();
@@ -17,7 +17,8 @@ function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
     this.home       = vec3.create();
 
     //update in drawing
-    this.tHome      = tHome;
+    // this.tHome      = tHome;
+    this.tHome      = vec3.create();
     this.tFocus     = tFocus;
     this.tAzimuth   = tAzimuth;
     this.tElevation = tElevation;
@@ -27,7 +28,7 @@ Camera.prototype.isMain = function() {
   return this.main;
 };
 
-Camera.prototype.setType = function(t){
+Camera.prototype.setType = function(t) {
 
     this.type = t;
 
@@ -35,7 +36,11 @@ Camera.prototype.setType = function(t){
         alert('Wrong Camera Type!. Setting Orbitting type by default');
         this.type = CAMERA_ORBITING_TYPE;
     }
-}
+};
+
+Camera.prototype.getAlias = function() {
+  return this.alias;
+};
 
 Camera.prototype.goHome = function(h) {
     if (h != null){
@@ -77,8 +82,13 @@ Camera.prototype.dolly = function(s){
     c.steps = s;
 }
 
+Camera.prototype.setHome = function(home) {
+  vec3.set(home, this.tHome);
+};
+
 Camera.prototype.setPosition = function(p){
     vec3.set(p, this.position);
+    vec3.set(p, this.tHome);
     this.update();
 }
 
@@ -166,8 +176,8 @@ Camera.prototype.beginDraw = function() {
 };
 
 Camera.prototype.endDraw = function() {
-  console.log('end of draw ' + this);
-}
+  console.log('end of draw ' + this.alias);
+};
 
 var Cameras = {
   list : [],
@@ -176,6 +186,8 @@ var Cameras = {
 			alert('the parameter is not a light');
 			return;
 		}
+    console.log("POSITIOOON " + position);
+    camera.setPosition(position);
 		this.list.push(camera);
 	},
 

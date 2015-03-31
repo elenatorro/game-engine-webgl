@@ -21,8 +21,8 @@ var Shaders = {
         + "   void main(void) {\n"
 
         + "        vec4 c = aVertexColor;\n"
-        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n"
-        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n"
+        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n" //coordenadas de vista
+        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n" //normal para la diferencia de vectores
         + "        vec4 lightPosition = vec4(0.0);\n"
 
         + "        if (uTranslateLights){ "
@@ -32,6 +32,7 @@ var Shaders = {
         + "              vEye[i] = -vec3(vertex.xyz);\n"
         + "            }\n"
         + "        }\n"
+
         + "        else {\n"
         + "           for(int i=0; i < NUM_LIGHTS; i++){\n"
         + "             lightPosition = vec4(uLightPosition[i], 1.0);\n"
@@ -39,7 +40,7 @@ var Shaders = {
         + "             vEye[i] = -vec3(vertex.xyz);\n"
         + "           }\n"
         + "       }\n"
-        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n"
+        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n" //pasa a 2D, multiplicando por el vertice original
         + "   }\n"
   },
 
