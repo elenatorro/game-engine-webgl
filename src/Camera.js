@@ -172,10 +172,12 @@ Camera.prototype.draw = function() {
 };
 
 Camera.prototype.beginDraw = function() {
+  transforms.push();
   this.draw();
 };
 
 Camera.prototype.endDraw = function() {
+  transforms.pop();
   console.log('end of draw ' + this.alias);
 };
 
@@ -186,7 +188,6 @@ var Cameras = {
 			alert('the parameter is not a light');
 			return;
 		}
-    console.log("POSITIOOON " + position);
     camera.setPosition(position);
 		this.list.push(camera);
 	},

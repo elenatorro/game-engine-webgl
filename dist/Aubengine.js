@@ -250,6 +250,26 @@ Transformation.prototype.endDraw = function() {
   console.log('end draw ' + this.name)
 }
 
+function Texture(img){
+	this.texture = gl.createTexture();
+	this.image = new Image();
+	var self = this;
+	this.image.onload = function() {
+		gl.bindTexture(gl.TEXTURE_2D, self.texture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, self.image);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+	}
+
+	this.image.src = img;
+};
+
+Texture.prototype.getTexture = function() {
+	return this.texture;
+};
+
 function Light(name){
 	this.id = name;
 	this.position = [0.0,0.0,0.0];
@@ -288,11 +308,13 @@ Light.prototype.setProperty = function(pName, pValue) {
 	}
 };
 
-Light.prototype.beginDraw = function() {
+Light.prototype.beginDraw = function(transforms) {
+	transforms.push();
 	Lights.draw();
 };
 
-Light.prototype.endDraw = function() {
+Light.prototype.endDraw = function(transforms) {
+	transforms.pop();
 	console.log('end draw ' + this.id);
 };
 
@@ -357,21 +379,23 @@ var Shaders = {
      "vertex" : {
       'type' : "x-shader/x-vertex",
        'content' : "const int NUM_LIGHTS =" + Lights.setNumLights() + ";\n"
-
+        /* geometry */
         + "   attribute vec3 aVertexPosition;\n"
         + "   attribute vec3 aVertexNormal;\n"
         + "   attribute vec4 aVertexColor;\n"
-
+        + "   attribute vec2 aVertexTextureCoords;\n"
+        /* matrices */
         + "   uniform mat4 uMVMatrix;\n"
         + "   uniform mat4 uPMatrix;\n"
         + "   uniform mat4 uNMatrix;\n"
-
+        /* lights */
         + "   uniform bool uTranslateLights;\n"
         + "   uniform vec3 uLightPosition[NUM_LIGHTS];\n"
-
+        /* varyings */
         + "   varying vec3 vNormal;\n"
         + "   varying vec3 vLightRay[NUM_LIGHTS];\n"
         + "   varying vec3 vEye[NUM_LIGHTS];\n"
+        + "   varying vec2 vTextureCoord;\n"
 
         + "   void main(void) {\n"
 
@@ -396,6 +420,7 @@ var Shaders = {
         + "           }\n"
         + "       }\n"
         + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n" //pasa a 2D, multiplicando por el vertice original
+        + "       vTextureCoord = aVertexTextureCoords;\n" //texturas
         + "   }\n"
   },
 
@@ -420,11 +445,15 @@ var Shaders = {
   + "  uniform float d;\n"    //Opacity
   + "  uniform int   illum;\n" //Illumination mode
 
-  + "  uniform bool  uWireframe;\n"
+  + "  uniform bool  uWireframe;\n" //wireframe
+  + "  uniform bool  uTextures;\n" //wireframe
+  + "  uniform sampler2D uSampler;\n" //texturas
 
+  /* varying */
   + "  varying vec3 vNormal;\n"
   + "  varying vec3 vLightRay[NUM_LIGHTS];\n"
   + "  varying vec3 vEye[NUM_LIGHTS];\n"
+  + "  varying vec2 vTextureCoord;\n"
 
   + "  float calculateAttenuation(in vec3 ray){\n"
   + "      float dist = length(ray);\n"
@@ -457,8 +486,13 @@ var Shaders = {
   + "              N = normalize(vNormal);\n"
   + "              COLOR += (uLa[i] * uKa) + (uLd[i] * uKd * clamp(dot(N, -L),0.0,1.0));\n"
   + "          }\n"
-  + "          gl_FragColor =  vec4(COLOR,d);\n"
-  + "          return;\n"
+
+  + "       if (uTextures){\n"
+  + "         gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));\n"
+  + "       } else {\n"
+  + "         gl_FragColor =  vec4(COLOR,d);\n"
+  + "       }\n"
+  + "       return;\n"
   + "     }\n"
 
   + "     if (illum == 2){\n"
@@ -471,8 +505,12 @@ var Shaders = {
   + "              COLOR += (uLd[i] * uKd * clamp(dot(N,-L),0.0,1.0));\n"// * calculateAttenuation(vLightRay[i]));
   + "              COLOR += (uLs[i] * uKs * pow( max(dot(R, E), 0.0), uNs) * 4.0);\n"
   + "          }\n"
-  + "          gl_FragColor =  vec4(COLOR,d);\n"
-  + "          return;\n"
+  + "       if (uTextures){\n"
+  + "         gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));\n"
+  + "       } else {\n"
+  + "         gl_FragColor = vec4(COLOR,d);\n"
+  + "       }\n"
+  + "       return;\n"
   + "     }\n"
   + "  }\n"
   }
@@ -480,9 +518,10 @@ var Shaders = {
 
 var Program = {
   //init Program
-  attributeList : ["aVertexPosition", "aVertexNormal", "aVertexColor"],
+  attributeList : ["aVertexPosition", "aVertexNormal", "aVertexColor", "aVertexTextureCoords"],
   uniformList   : [	"uPMatrix", "uMVMatrix", "uNMatrix", "uLightPosition", "uWireframe",
-                    "uLa", "uLd", "uLs", "uKa", "uKd", "uKs", "uNs", "d", "illum", "uTranslateLights"
+                    "uLa", "uLd", "uLs", "uKa", "uKd", "uKs", "uNs", "d", "illum", "uTranslateLights",
+                    "uSampler", "uTexture"
                   ],
 
     getShader : function(gl, id) {
@@ -557,7 +596,7 @@ var Program = {
 
 'use strict'
 
-function Mesh(filename, alias) {
+function Mesh(filename, alias, texture) {
   this.filename = filename;
   this.alias   = alias;
   this.ambient = null;
@@ -567,8 +606,8 @@ function Mesh(filename, alias) {
   this.vertices = null;
   this.indices = null;
   this.scalars = null;
-  this.textureCoords = null;
-  this.texture = null;
+  this.texture_coords = null;
+  this.texture = texture || null;
   this.image = null;
   this.tbo = null;
   this.cbo = null;
@@ -639,17 +678,43 @@ Mesh.prototype.getAttributes = function() {
     "Kd" : this.Kd,
     "illum" : this.illum,
     "Ks" : this.Ks,
-    "Ns" : this.Ns
+    "Ns" : this.Ns,
+    "texture": this.texture
   };
   return attributes;
 };
 
-Mesh.prototype.draw = function(father) {
+Mesh.prototype.defaultCoords = function() {
+  return [0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0];
+};
+
+Mesh.prototype.draw = function() {
   try{
     var object = Scene.getObject(this.getAlias());
-    gl.enableVertexAttribArray(Program.aVertexPosition);
-    gl.disableVertexAttribArray(Program.aVertexNormal);
-    gl.disableVertexAttribArray(Program.aVertexColor);
+
 
     gl.uniform1i(Program.uWireframe, false);
     gl.uniform3fv(Program.uKa, object.Ka);
@@ -659,14 +724,34 @@ Mesh.prototype.draw = function(father) {
     gl.uniform1f(Program.d, object.d);
     gl.uniform1i(Program.illum, object.illum);
 
-   if(object.d < 1.0){  //tweaking parameters here
-         gl.uniform1f(Program.d, 0.14);
-        }
+    gl.enableVertexAttribArray(Program.aVertexPosition);
+    gl.disableVertexAttribArray(Program.aVertexNormal);
+    gl.disableVertexAttribArray(Program.aVertexColor);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
     gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(Program.aVertexPosition);
 
+   if(object.d < 1.0){  //tweaking parameters here
+         gl.uniform1f(Program.d, 0.14);
+        }
+    /* texture */
+    if (object.texture_coords) {
+      // console.info('the object '+object.alias+' has texture coordinates');
+      //
+      textureBufferObject = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
+
+      gl.uniform1i(Program.uTextures, 1);
+      gl.enableVertexAttribArray(Program.aVertexTextureCoords);
+      gl.vertexAttribPointer(Program.aVertexTextureCoords, 2, gl.FLOAT, false, 0, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, object.texture.getTexture());
+      gl.uniform1i(Program.uSampler, 0);
+    };
+
+    /* wireframe */
     if(!object.wireframe){
       gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
       gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
@@ -688,14 +773,15 @@ Mesh.prototype.draw = function(father) {
           gl.bindBuffer(gl.ARRAY_BUFFER, null);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
+
   }
   catch(err){
-      // alert(err);
       console.error(err.description);
     }
 };
 
-Mesh.prototype.beginDraw = function() {
+Mesh.prototype.beginDraw = function(transforms) {
+  console.log('begin draw' + this.alias);
   this.draw();
 }
 
@@ -746,6 +832,7 @@ var Scene = {
 
         //deffault object light
         if (object.wireframe        === undefined)    {   object.wireframe        = false;            }
+        if (object.texture          === undefined)    {   object.texture          = false;            }
         if (object.diffuse          === undefined)    {   object.diffuse          = [1.0,1.0,1.0,1.0];}
         if (object.ambient          === undefined)    {   object.ambient          = [0.2,0.2,0.2,1.0];}
         if (object.specular         === undefined)    {   object.specular         = [1.0,1.0,1.0,1.0];}
@@ -773,9 +860,10 @@ var Scene = {
 
 		var textureBufferObject, tangentBufferObject;
 		if (object.texture_coords){
-			console.info('the object '+object.name+' has texture coordinates');
+			// console.info('the object '+object.alias+' has texture coordinates');
 			textureBufferObject = gl.createBuffer();
 			gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
+
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
 			object.tbo = textureBufferObject;
 
@@ -785,10 +873,6 @@ var Scene = {
             gl.bindBuffer(gl.ARRAY_BUFFER,null);
             object.tanbo = tangentBufferObject;
 		}
-
-        if (object.image){
-            object.texture = new Texture(object.image);
-        }
 
         var indexBufferObject = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferObject);
@@ -950,6 +1034,7 @@ var Color = {
 
   rgb2decimal: function(r,g,b) {
     return [r/255, g/255, b/255];
+	  
   }
 }
 
@@ -1127,10 +1212,12 @@ Camera.prototype.draw = function() {
 };
 
 Camera.prototype.beginDraw = function() {
+  transforms.push();
   this.draw();
 };
 
 Camera.prototype.endDraw = function() {
+  transforms.pop();
   console.log('end of draw ' + this.alias);
 };
 
@@ -1141,7 +1228,6 @@ var Cameras = {
 			alert('the parameter is not a light');
 			return;
 		}
-    console.log("POSITIOOON " + position);
     camera.setPosition(position);
 		this.list.push(camera);
 	},
@@ -1475,13 +1561,13 @@ function NodeTree(entity, father, children) {
     return this.children.length;
   };
 
-  NodeTree.prototype.nextSibling = function() {
-    return ((!this.isRoot()) && (this.hasSibling())) ? this.father.getChild(this.index() +1) : null;
-  };
-
   NodeTree.prototype.hasSibling = function() {
     return (this.father.existsChild(this.father.getChild(this.index() +1 )));
   }
+
+  NodeTree.prototype.nextSibling = function() {
+    return ((!this.isRoot()) && (this.hasSibling())) ? this.father.getChild(this.index() +1) : null;
+  };
 
   NodeTree.prototype.addChild = function(child) {
     child.setFather(this);
@@ -1542,12 +1628,12 @@ function NodeTree(entity, father, children) {
     return this.root;
   };
 
-  Tree.prototype.drawPreorder = function(node) {
+  Tree.prototype.drawPreorder = function(node, transforms) {
     if (node == null) return;
-    node.getEntity().beginDraw();
-    this.drawPreorder(node.firstChild());
-    this.drawPreorder(node.nextSibling());
-    node.getEntity().endDraw();
+    node.getEntity().beginDraw(transforms);
+    this.drawPreorder(node.firstChild(),transforms);
+    this.drawPreorder(node.nextSibling(),transforms);
+    node.getEntity().endDraw(transforms);
   };
 
   Tree.prototype.save = function(node, aubengine) {
@@ -1563,8 +1649,8 @@ function NodeTree(entity, father, children) {
     this.save(node.nextSibling(), aubengine);
   };
 
-  Tree.prototype.draw = function() {
-    this.drawPreorder(this.getRoot().firstChild());
+  Tree.prototype.draw = function(transforms) {
+    this.drawPreorder(this.getRoot().firstChild(), transforms);
   };
 
   Tree.prototype.saveEntities = function(draw) {
@@ -1607,6 +1693,9 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  this.loadProgram();
 }
 
 Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
@@ -1625,12 +1714,12 @@ Aubengine.prototype.setMainCamera = function(camera) {
 
 };
 
-Aubengine.prototype.loadProgram = function(translateLights) {
+Aubengine.prototype.loadProgram = function() {
   Program.load();
 }
 
-Aubengine.prototype.createMesh = function(filename, alias) {
-  var mesh = new Mesh(filename, alias);
+Aubengine.prototype.createMesh = function(filename, alias, texture) {
+  var mesh = new Mesh(filename, alias, texture);
   return mesh;
 };
 
@@ -1677,7 +1766,6 @@ Aubengine.prototype.createNode = function(entity) {
 
 
 Aubengine.prototype.draw = function() {
-  this.loadProgram(false);
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   this.transforms.updatePerspective();

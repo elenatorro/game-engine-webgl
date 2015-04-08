@@ -8,12 +8,12 @@
     return this.root;
   };
 
-  Tree.prototype.drawPreorder = function(node) {
+  Tree.prototype.drawPreorder = function(node, transforms) {
     if (node == null) return;
-    node.getEntity().beginDraw();
-    this.drawPreorder(node.firstChild());
-    this.drawPreorder(node.nextSibling());
-    node.getEntity().endDraw();
+    node.getEntity().beginDraw(transforms);
+    this.drawPreorder(node.firstChild(),transforms);
+    this.drawPreorder(node.nextSibling(),transforms);
+    node.getEntity().endDraw(transforms);
   };
 
   Tree.prototype.save = function(node, aubengine) {
@@ -29,8 +29,8 @@
     this.save(node.nextSibling(), aubengine);
   };
 
-  Tree.prototype.draw = function() {
-    this.drawPreorder(this.getRoot().firstChild());
+  Tree.prototype.draw = function(transforms) {
+    this.drawPreorder(this.getRoot().firstChild(), transforms);
   };
 
   Tree.prototype.saveEntities = function(draw) {

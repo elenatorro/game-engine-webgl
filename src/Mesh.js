@@ -1,6 +1,6 @@
 'use strict'
 
-function Mesh(filename, alias) {
+function Mesh(filename, alias, texture) {
   this.filename = filename;
   this.alias   = alias;
   this.ambient = null;
@@ -10,8 +10,8 @@ function Mesh(filename, alias) {
   this.vertices = null;
   this.indices = null;
   this.scalars = null;
-  this.textureCoords = null;
-  this.texture = null;
+  this.texture_coords = null;
+  this.texture = texture || null;
   this.image = null;
   this.tbo = null;
   this.cbo = null;
@@ -82,17 +82,43 @@ Mesh.prototype.getAttributes = function() {
     "Kd" : this.Kd,
     "illum" : this.illum,
     "Ks" : this.Ks,
-    "Ns" : this.Ns
+    "Ns" : this.Ns,
+    "texture": this.texture
   };
   return attributes;
 };
 
-Mesh.prototype.draw = function(father) {
+Mesh.prototype.defaultCoords = function() {
+  return [0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0];
+};
+
+Mesh.prototype.draw = function() {
   try{
     var object = Scene.getObject(this.getAlias());
-    gl.enableVertexAttribArray(Program.aVertexPosition);
-    gl.disableVertexAttribArray(Program.aVertexNormal);
-    gl.disableVertexAttribArray(Program.aVertexColor);
+
 
     gl.uniform1i(Program.uWireframe, false);
     gl.uniform3fv(Program.uKa, object.Ka);
@@ -102,14 +128,34 @@ Mesh.prototype.draw = function(father) {
     gl.uniform1f(Program.d, object.d);
     gl.uniform1i(Program.illum, object.illum);
 
-   if(object.d < 1.0){  //tweaking parameters here
-         gl.uniform1f(Program.d, 0.14);
-        }
+    gl.enableVertexAttribArray(Program.aVertexPosition);
+    gl.disableVertexAttribArray(Program.aVertexNormal);
+    gl.disableVertexAttribArray(Program.aVertexColor);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
     gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(Program.aVertexPosition);
 
+   if(object.d < 1.0){  //tweaking parameters here
+         gl.uniform1f(Program.d, 0.14);
+        }
+    /* texture */
+    if (object.texture_coords) {
+      // console.info('the object '+object.alias+' has texture coordinates');
+      //
+      textureBufferObject = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
+
+      gl.uniform1i(Program.uTextures, 1);
+      gl.enableVertexAttribArray(Program.aVertexTextureCoords);
+      gl.vertexAttribPointer(Program.aVertexTextureCoords, 2, gl.FLOAT, false, 0, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, object.texture.getTexture());
+      gl.uniform1i(Program.uSampler, 0);
+    };
+
+    /* wireframe */
     if(!object.wireframe){
       gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
       gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
@@ -131,14 +177,15 @@ Mesh.prototype.draw = function(father) {
           gl.bindBuffer(gl.ARRAY_BUFFER, null);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
+
   }
   catch(err){
-      // alert(err);
       console.error(err.description);
     }
 };
 
-Mesh.prototype.beginDraw = function() {
+Mesh.prototype.beginDraw = function(transforms) {
+  console.log('begin draw' + this.alias);
   this.draw();
 }
 

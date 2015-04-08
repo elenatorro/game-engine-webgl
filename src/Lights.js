@@ -36,11 +36,13 @@ Light.prototype.setProperty = function(pName, pValue) {
 	}
 };
 
-Light.prototype.beginDraw = function() {
+Light.prototype.beginDraw = function(transforms) {
+	transforms.push();
 	Lights.draw();
 };
 
-Light.prototype.endDraw = function() {
+Light.prototype.endDraw = function(transforms) {
+	transforms.pop();
 	console.log('end draw ' + this.id);
 };
 
