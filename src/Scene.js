@@ -41,6 +41,7 @@ var Scene = {
 
         //deffault object light
         if (object.wireframe        === undefined)    {   object.wireframe        = false;            }
+        if (object.texture          === undefined)    {   object.texture          = false;            }
         if (object.diffuse          === undefined)    {   object.diffuse          = [1.0,1.0,1.0,1.0];}
         if (object.ambient          === undefined)    {   object.ambient          = [0.2,0.2,0.2,1.0];}
         if (object.specular         === undefined)    {   object.specular         = [1.0,1.0,1.0,1.0];}
@@ -68,9 +69,10 @@ var Scene = {
 
 		var textureBufferObject, tangentBufferObject;
 		if (object.texture_coords){
-			console.info('the object '+object.name+' has texture coordinates');
+			// console.info('the object '+object.alias+' has texture coordinates');
 			textureBufferObject = gl.createBuffer();
 			gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
+
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
 			object.tbo = textureBufferObject;
 
@@ -80,10 +82,6 @@ var Scene = {
             gl.bindBuffer(gl.ARRAY_BUFFER,null);
             object.tanbo = tangentBufferObject;
 		}
-
-        if (object.image){
-            object.texture = new Texture(object.image);
-        }
 
         var indexBufferObject = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferObject);

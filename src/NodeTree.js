@@ -37,15 +37,15 @@ function NodeTree(entity, father, children) {
   NodeTree.prototype.childrenNumber = function() {
     return this.children.length;
   };
-	
+
   NodeTree.prototype.hasSibling = function() {
     return (this.father.existsChild(this.father.getChild(this.index() +1 )));
   }
-  
+
   NodeTree.prototype.nextSibling = function() {
     return ((!this.isRoot()) && (this.hasSibling())) ? this.father.getChild(this.index() +1) : null;
   };
-  
+
   NodeTree.prototype.addChild = function(child) {
     child.setFather(this);
     this.children.push(child);

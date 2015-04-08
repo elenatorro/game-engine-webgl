@@ -33,6 +33,9 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  this.loadProgram();
 }
 
 Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
@@ -51,12 +54,12 @@ Aubengine.prototype.setMainCamera = function(camera) {
 
 };
 
-Aubengine.prototype.loadProgram = function(translateLights) {
+Aubengine.prototype.loadProgram = function() {
   Program.load();
 }
 
-Aubengine.prototype.createMesh = function(filename, alias) {
-  var mesh = new Mesh(filename, alias);
+Aubengine.prototype.createMesh = function(filename, alias, texture) {
+  var mesh = new Mesh(filename, alias, texture);
   return mesh;
 };
 
@@ -103,7 +106,6 @@ Aubengine.prototype.createNode = function(entity) {
 
 
 Aubengine.prototype.draw = function() {
-  this.loadProgram(false);
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   this.transforms.updatePerspective();
