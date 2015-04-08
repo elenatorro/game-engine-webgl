@@ -12,8 +12,10 @@
 
 var aubengine;
 
-function runShowRoom(){
+function runShowRoom() {
   aubengine = new Aubengine("the-canvas");
+  var cubeTexture = new Texture('textures/light.png');
+  console.log(cubeTexture);
   aubengine.setUpEnvironment();
   //create main camera
   var camera1          = aubengine.createCamera('camera1',[0.0,0.0,0.0], 10,-11);
@@ -40,7 +42,7 @@ function runShowRoom(){
   var cubeRot  = {angle: 86, axis: [0,2,1]};
   var cubeTransform = aubengine.createTransformation('cubeTrans', cubePos, cubeSize, cubeRot);
 
-  var chairPos  = [-1,-1,-10];
+  var chairPos  = [-1,-4,-10];
   var chairSize = [0.2, 0.2, 0.2];
   var chairTransform = aubengine.createTransformation('chairTrans', chairPos, chairSize);
 
@@ -50,13 +52,13 @@ function runShowRoom(){
   var nright = aubengine.createLight('nright', [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
 
   //create some meshes
-  var cube  = aubengine.createMesh('models/simpleCube.json', 'cube');
-  cube.setSpecularColor(255, 123, 19);
+  var cube  = aubengine.createMesh('models/complexCube.json', 'cube', cubeTexture);
+  // cube.setSpecularColor(255, 123, 19);
 
   var sphere = aubengine.createMesh('models/sphere.json', 'sphere');
   sphere.setSpecularColor(40, 255, 255);
 
-  var chair = aubengine.createMesh('models/chair.json', 'chair');
+  var chair = aubengine.createMesh('models/valla.json', 'chair');
   chair.setSpecularColor(255, 30, 120);
 
 
@@ -112,7 +114,7 @@ function runShowRoom(){
 
   aubengine.getTree().saveEntities(aubengine);
 
-  aubengine.setMainCamera(Cameras.get(1));
+  aubengine.setMainCamera(Cameras.get(0));
 };
 
 </script>
