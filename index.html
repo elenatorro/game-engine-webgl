@@ -12,10 +12,13 @@
 
 var aubengine;
 
+function endDraw() {
+  console.log("END DRAAAW");
+};
+
 function runShowRoom() {
   aubengine = new Aubengine("the-canvas");
-  var cubeTexture = new Texture('textures/light.png');
-  console.log(cubeTexture);
+  var cubeTexture = new Texture('textures/marble.png');
   aubengine.setUpEnvironment();
   //create main camera
   var camera1          = aubengine.createCamera('camera1',[0.0,0.0,0.0], 10,-11);
@@ -44,7 +47,8 @@ function runShowRoom() {
 
   var chairPos  = [-1,-4,-10];
   var chairSize = [0.2, 0.2, 0.2];
-  var chairTransform = aubengine.createTransformation('chairTrans', chairPos, chairSize);
+  var chairRot  = {angle: 10, axis: [0,1,0]};
+  var chairTransform = aubengine.createTransformation('chairTrans', chairPos, chairSize, chairRot);
 
   var fleft  = aubengine.createLight('fleft',  [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
   var fright = aubengine.createLight('fright', [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
@@ -99,28 +103,34 @@ function runShowRoom() {
   var meshNode = aubengine.createNode(sphere);
   aubengine.addNode(transform5, meshNode);
 
-  //mesh2
-  var transform6 = aubengine.createNode(cubeTransform);
-  aubengine.addNode(aubengine.getRoot(), transform6);
-  var meshNode2 = aubengine.createNode(cube);
-  aubengine.addNode(transform6, meshNode2);
-  var cameraNode2 = aubengine.createNode(camera2);
-  aubengine.addNode(transform6, cameraNode2);
-
   var transform7 = aubengine.createNode(chairTransform);
+  chairTransform.animate(1, aubengine, 100, chairTransform.translate, [chairTransform.position, [0.05,0,0]]);
+  chairTransform.animate(15, aubengine, 50, chairTransform.rotate, [chairTransform.rotation, {angle: 5, axis: [0,0,0]}]);
+
   aubengine.addNode(aubengine.getRoot(), transform7);
   var meshNode3 = aubengine.createNode(chair);
   aubengine.addNode(transform7, meshNode3);
 
-  aubengine.getTree().saveEntities(aubengine);
+  //mesh2
+  // var transform6 = aubengine.createNode(cubeTransform);
+  // aubengine.addNode(aubengine.getRoot(), transform6);
+  // var meshNode2 = aubengine.createNode(cube);
+  // aubengine.addNode(transform6, meshNode2);
+  // var cameraNode2 = aubengine.createNode(camera2);
+  // aubengine.addNode(transform6, cameraNode2);
 
+  aubengine.getTree().saveEntities(aubengine, endDraw);
   aubengine.setMainCamera(Cameras.get(0));
+  var animation = new Animation(2, aubengine, 100);
+  animation.startAnimation();
+  chairTransform.startAnimation();
+  // animation.stopAnimation();
 };
 
 </script>
 </head>
 
-<body onload="runShowRoom(draw)">
+<body onload="runShowRoom()">
 <div id="header">
     <h1>Aubengine</h1>
     <button id="draw" class="btn btn-default">draw</button>
@@ -133,6 +143,7 @@ function runShowRoom() {
 <script type='text/javascript'>resizeCanvas();</script>
 <script type='text/javascript'>document.getElementById('draw').addEventListener('click', function(event) {
   aubengine.draw();
-});</script>
+})
+  </script>
 </body>
 </html>
