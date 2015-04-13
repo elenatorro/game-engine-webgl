@@ -2,27 +2,29 @@ var Shaders = {
      "vertex" : {
       'type' : "x-shader/x-vertex",
        'content' : "const int NUM_LIGHTS =" + Lights.setNumLights() + ";\n"
-
+        /* geometry */
         + "   attribute vec3 aVertexPosition;\n"
         + "   attribute vec3 aVertexNormal;\n"
         + "   attribute vec4 aVertexColor;\n"
-
+        + "   attribute vec2 aVertexTextureCoords;\n"
+        /* matrices */
         + "   uniform mat4 uMVMatrix;\n"
         + "   uniform mat4 uPMatrix;\n"
         + "   uniform mat4 uNMatrix;\n"
-
+        /* lights */
         + "   uniform bool uTranslateLights;\n"
         + "   uniform vec3 uLightPosition[NUM_LIGHTS];\n"
-
+        /* varyings */
         + "   varying vec3 vNormal;\n"
         + "   varying vec3 vLightRay[NUM_LIGHTS];\n"
         + "   varying vec3 vEye[NUM_LIGHTS];\n"
+        + "   varying vec2 vTextureCoord;\n"
 
         + "   void main(void) {\n"
 
         + "        vec4 c = aVertexColor;\n"
-        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n"
-        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n"
+        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n" //coordenadas de vista
+        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n" //normal para la diferencia de vectores
         + "        vec4 lightPosition = vec4(0.0);\n"
 
         + "        if (uTranslateLights){ "
@@ -32,6 +34,7 @@ var Shaders = {
         + "              vEye[i] = -vec3(vertex.xyz);\n"
         + "            }\n"
         + "        }\n"
+
         + "        else {\n"
         + "           for(int i=0; i < NUM_LIGHTS; i++){\n"
         + "             lightPosition = vec4(uLightPosition[i], 1.0);\n"
@@ -39,7 +42,8 @@ var Shaders = {
         + "             vEye[i] = -vec3(vertex.xyz);\n"
         + "           }\n"
         + "       }\n"
-        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n"
+        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n" //pasa a 2D, multiplicando por el vertice original
+        + "       vTextureCoord = aVertexTextureCoords;\n" //texturas
         + "   }\n"
   },
 
@@ -64,11 +68,15 @@ var Shaders = {
   + "  uniform float d;\n"    //Opacity
   + "  uniform int   illum;\n" //Illumination mode
 
-  + "  uniform bool  uWireframe;\n"
+  + "  uniform bool  uWireframe;\n" //wireframe
+  + "  uniform bool  uTextures;\n" //wireframe
+  + "  uniform sampler2D uSampler;\n" //texturas
 
+  /* varying */
   + "  varying vec3 vNormal;\n"
   + "  varying vec3 vLightRay[NUM_LIGHTS];\n"
   + "  varying vec3 vEye[NUM_LIGHTS];\n"
+  + "  varying vec2 vTextureCoord;\n"
 
   + "  float calculateAttenuation(in vec3 ray){\n"
   + "      float dist = length(ray);\n"
@@ -101,8 +109,13 @@ var Shaders = {
   + "              N = normalize(vNormal);\n"
   + "              COLOR += (uLa[i] * uKa) + (uLd[i] * uKd * clamp(dot(N, -L),0.0,1.0));\n"
   + "          }\n"
-  + "          gl_FragColor =  vec4(COLOR,d);\n"
-  + "          return;\n"
+
+  + "       if (uTextures){\n"
+  + "         gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));\n"
+  + "       } else {\n"
+  + "         gl_FragColor =  vec4(COLOR,d);\n"
+  + "       }\n"
+  + "       return;\n"
   + "     }\n"
 
   + "     if (illum == 2){\n"
@@ -115,8 +128,12 @@ var Shaders = {
   + "              COLOR += (uLd[i] * uKd * clamp(dot(N,-L),0.0,1.0));\n"// * calculateAttenuation(vLightRay[i]));
   + "              COLOR += (uLs[i] * uKs * pow( max(dot(R, E), 0.0), uNs) * 4.0);\n"
   + "          }\n"
-  + "          gl_FragColor =  vec4(COLOR,d);\n"
-  + "          return;\n"
+  + "       if (uTextures){\n"
+  + "         gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));\n"
+  + "       } else {\n"
+  + "         gl_FragColor = vec4(COLOR,d);\n"
+  + "       }\n"
+  + "       return;\n"
   + "     }\n"
   + "  }\n"
   }

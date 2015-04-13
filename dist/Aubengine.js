@@ -42,8 +42,12 @@ var c_width = 0;
 var c_height = 0;
 var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
 var interactor = null;
+var transforms = null;
+var elapsedTime = undefined;
+var initialTime = undefined;
+var frequency = 5;
 
-function resizeCanvas(){
+function resizeCanvas(aubengine){
     c_width = $('#content').width();
     c_height = $('#content').height();
     $('#the-canvas').attr('width',c_width);
@@ -52,6 +56,47 @@ function resizeCanvas(){
 }
 
 $(window).resize(function(){resizeCanvas();});
+
+'use strict';
+
+function Animation(frequency, scene, times, callback, data) {
+  this.scene = scene;
+  this.frequency = frequency;
+  this.interval = null;
+  this.callback = callback;
+  var stopAnimation = this.stopAnimation;
+  var count = 0;
+  var iTime = (new Date).getTime() + 1000;
+  var eTime;
+
+  this.onFrame = function() {
+    eTime = (new Date).getTime() - iTime;
+      if (eTime < 5) return;
+      var steps = Math.floor(eTime / frequency);
+      while(steps > 0) {
+          if (callback) {
+              if (count == times) break;
+              count++;
+            callback(data);
+          } else {
+            scene.draw();
+          }
+          steps -= 1;
+      };
+      if (count == times) stopAnimation();
+    iTime = (new Date).getTime();
+  };
+};
+
+Animation.prototype.startAnimation = function() {
+  this.iTime = (new Date).getTime();
+  var self = this;
+	this.interval = setInterval(self.onFrame, self.frequency/1000);
+};
+
+Animation.prototype.stopAnimation = function() {
+  clearInterval(this.interval);
+};
 
 var	Configuration = {
 
@@ -198,41 +243,122 @@ var	Configuration = {
     }
 }
 
-requestAnimFrame = (function() {
-    return window.requestAnimationFrame ||
-         window.webkitRequestAnimationFrame ||
-         window.mozRequestAnimationFrame ||
-         window.oRequestAnimationFrame ||
-         window.msRequestAnimationFrame ||
-         function(callback, element) {
-           window.setTimeout(callback, 1000/60);
-         };
-})();
+'use strict'
+
+function Transformation(name, position, size, rotation) {
+  this.name = name;
+  this.mv = null;
+  this.position = position || [0,0,0];
+  this.size = size || [1,1,1];
+  this.rotation = rotation || {angle: 0, axis: [0,0,0]};  //angle, axis
+  this.animations = [];
+};
+
+Transformation.prototype.getPosition = function() {
+  return this.position;
+};
+
+Transformation.prototype.startAnimation = function() {
+  this.animations.forEach(function(animation) {
+    animation.startAnimation();
+  })
+};
+
+Transformation.prototype.copy = function() {
+  var self = this;
+  var newTransformation = new Transformation(self.name, self.position, self.size, self.rotation);
+  return newTransformation;
+};
+
+Transformation.prototype.beginDraw = function() {
+  transforms.push(); //apila
+  transforms.calculateModelView(); //calcula la matriz actual
+  this.mv = transforms.mvMatrix; //hace una copia
+
+  if (this.position!=null) {
+    mat4.translate(this.mv, this.position);
+  };
+
+  if (this.size!=null) {
+    mat4.scale(this.mv, this.size);
+  };
+
+  if (this.rotation!=null) {
+			mat4.rotate(this.mv,(this.rotation.angle*Math.PI/180),this.rotation.axis);
+  };
+
+  transforms.setMatrixUniforms();
+  console.log('begin draw ' + this.name);
+};
+
+Transformation.prototype.endDraw = function() {
+  transforms.pop(); //la desapila y la pone como mvMatrix
+  console.log('end draw ' + this.name)
+}
+
+/* ANIMACION */
+Transformation.prototype.rotate = function(rotations) {
+  rotations[0].angle = rotations[1].angle + rotations[0].angle;
+};
+
+Transformation.prototype.translate = function(positions) {
+  vec3.add(positions[0], positions[1], positions[0]);
+};
+
+
+Transformation.prototype.scale = function(size) {
+  this.size = size;
+  return this;
+};
+
+Transformation.prototype.animate = function(frequency, scene, times, callback, data) {
+  this.animations.push(new Animation(frequency, scene, times, callback, data));
+};
+
+function Texture(img){
+	this.texture = gl.createTexture();
+	this.image = new Image();
+	var self = this;
+	this.image.src = img;
+	this.image.onload = function() {
+		gl.bindTexture(gl.TEXTURE_2D, self.texture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, self.image);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+	}
+};
+
+Texture.prototype.getTexture = function() {
+	return this.texture;
+};
 
 function Light(name){
 	this.id = name;
 	this.position = [0.0,0.0,0.0];
-	this.ambient = [0.0,0.0,0.0,0.0];
-	this.diffuse = [0.0,0.0,0.0,0.0];
+	this.ambient  = [0.0,0.0,0.0,0.0];
+	this.diffuse  = [0.0,0.0,0.0,0.0];
 	this.specular = [0.0,0.0,0.0,0.0];
 }
 
-Light.prototype.setPosition = function(p){
+Light.prototype.setPosition = function(p) {
 	this.position = p.slice(0);
-}
-Light.prototype.setDiffuse = function (d){
+};
+
+Light.prototype.setDiffuse = function (d) {
 	this.diffuse = d.slice(0);
 }
 
-Light.prototype.setAmbient = function(a){
+Light.prototype.setAmbient = function(a) {
 	this.ambient = a.slice(0);
 }
 
-Light.prototype.setSpecular = function(s){
+Light.prototype.setSpecular = function(s) {
 	this.specular = s.slice(0);
 }
 
-Light.prototype.setProperty = function(pName, pValue){
+Light.prototype.setProperty = function(pName, pValue) {
 	if(typeof pName == 'string'){
 		if (pValue instanceof Array){
 			this[pName] = pValue.slice(0);
@@ -244,15 +370,26 @@ Light.prototype.setProperty = function(pName, pValue){
 	else{
 		throw 'The property name must be a string';
 	}
-}
+};
+
+Light.prototype.beginDraw = function(transforms) {
+	var self = this;
+	Lights.draw(self, transforms);
+	console.log('beginDraw of ' + this.id);
+};
+
+Light.prototype.endDraw = function(transforms) {
+	console.log('endDraw of ' + this.id);
+};
 
 var Lights = {
 	list : [],
-	add : function(light){
+	add : function(light, position){
 		if (!(light instanceof Light)){
 			alert('the parameter is not a light');
 			return;
 		}
+		light.setPosition(position);
 		this.list.push(light);
 	},
 
@@ -282,6 +419,23 @@ var Lights = {
 	setNumLights: function() {
 		if (this.list.length <= 0) return 4
 		else return this.list.length
+	},
+
+	//draws all the lights
+	draw: function(light, transforms) {
+		//lights uniform vector, uses PHONG
+		gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
+		gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));
+		gl.uniform3fv(Program.uLd, Lights.getArray('diffuse'));
+		gl.uniform3fv(Program.uLs, Lights.getArray('specular'));
+
+		//object properties uniform vector
+		gl.uniform3fv(Program.uKa, [1.0,1.0,1.0]);
+		gl.uniform3fv(Program.uKd, [1.0,1.0,1.0]);
+		gl.uniform3fv(Program.uKs, [1.0,1.0,1.0]);
+
+		gl.uniform1f(Program.uNs, 1.0);
+		gl.uniform1i(Program.uTranslateLights, true);
 	}
 }
 
@@ -289,27 +443,29 @@ var Shaders = {
      "vertex" : {
       'type' : "x-shader/x-vertex",
        'content' : "const int NUM_LIGHTS =" + Lights.setNumLights() + ";\n"
-
+        /* geometry */
         + "   attribute vec3 aVertexPosition;\n"
         + "   attribute vec3 aVertexNormal;\n"
         + "   attribute vec4 aVertexColor;\n"
-
+        + "   attribute vec2 aVertexTextureCoords;\n"
+        /* matrices */
         + "   uniform mat4 uMVMatrix;\n"
         + "   uniform mat4 uPMatrix;\n"
         + "   uniform mat4 uNMatrix;\n"
-
+        /* lights */
         + "   uniform bool uTranslateLights;\n"
         + "   uniform vec3 uLightPosition[NUM_LIGHTS];\n"
-
+        /* varyings */
         + "   varying vec3 vNormal;\n"
         + "   varying vec3 vLightRay[NUM_LIGHTS];\n"
         + "   varying vec3 vEye[NUM_LIGHTS];\n"
+        + "   varying vec2 vTextureCoord;\n"
 
         + "   void main(void) {\n"
 
         + "        vec4 c = aVertexColor;\n"
-        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n"
-        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n"
+        + "        vec4 vertex = uMVMatrix * vec4(aVertexPosition, 1.0);\n" //coordenadas de vista
+        + "        vNormal = vec3(uNMatrix * vec4(aVertexNormal, 1.0));\n" //normal para la diferencia de vectores
         + "        vec4 lightPosition = vec4(0.0);\n"
 
         + "        if (uTranslateLights){ "
@@ -319,6 +475,7 @@ var Shaders = {
         + "              vEye[i] = -vec3(vertex.xyz);\n"
         + "            }\n"
         + "        }\n"
+
         + "        else {\n"
         + "           for(int i=0; i < NUM_LIGHTS; i++){\n"
         + "             lightPosition = vec4(uLightPosition[i], 1.0);\n"
@@ -326,7 +483,8 @@ var Shaders = {
         + "             vEye[i] = -vec3(vertex.xyz);\n"
         + "           }\n"
         + "       }\n"
-        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n"
+        + "       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n" //pasa a 2D, multiplicando por el vertice original
+        + "       vTextureCoord = aVertexTextureCoords;\n" //texturas
         + "   }\n"
   },
 
@@ -351,11 +509,15 @@ var Shaders = {
   + "  uniform float d;\n"    //Opacity
   + "  uniform int   illum;\n" //Illumination mode
 
-  + "  uniform bool  uWireframe;\n"
+  + "  uniform bool  uWireframe;\n" //wireframe
+  + "  uniform bool  uTextures;\n" //wireframe
+  + "  uniform sampler2D uSampler;\n" //texturas
 
+  /* varying */
   + "  varying vec3 vNormal;\n"
   + "  varying vec3 vLightRay[NUM_LIGHTS];\n"
   + "  varying vec3 vEye[NUM_LIGHTS];\n"
+  + "  varying vec2 vTextureCoord;\n"
 
   + "  float calculateAttenuation(in vec3 ray){\n"
   + "      float dist = length(ray);\n"
@@ -388,8 +550,13 @@ var Shaders = {
   + "              N = normalize(vNormal);\n"
   + "              COLOR += (uLa[i] * uKa) + (uLd[i] * uKd * clamp(dot(N, -L),0.0,1.0));\n"
   + "          }\n"
-  + "          gl_FragColor =  vec4(COLOR,d);\n"
-  + "          return;\n"
+
+  + "       if (uTextures){\n"
+  + "         gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));\n"
+  + "       } else {\n"
+  + "         gl_FragColor =  vec4(COLOR,d);\n"
+  + "       }\n"
+  + "       return;\n"
   + "     }\n"
 
   + "     if (illum == 2){\n"
@@ -402,8 +569,12 @@ var Shaders = {
   + "              COLOR += (uLd[i] * uKd * clamp(dot(N,-L),0.0,1.0));\n"// * calculateAttenuation(vLightRay[i]));
   + "              COLOR += (uLs[i] * uKs * pow( max(dot(R, E), 0.0), uNs) * 4.0);\n"
   + "          }\n"
-  + "          gl_FragColor =  vec4(COLOR,d);\n"
-  + "          return;\n"
+  + "       if (uTextures){\n"
+  + "         gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));\n"
+  + "       } else {\n"
+  + "         gl_FragColor = vec4(COLOR,d);\n"
+  + "       }\n"
+  + "       return;\n"
   + "     }\n"
   + "  }\n"
   }
@@ -411,9 +582,10 @@ var Shaders = {
 
 var Program = {
   //init Program
-  attributeList : ["aVertexPosition", "aVertexNormal", "aVertexColor"],
+  attributeList : ["aVertexPosition", "aVertexNormal", "aVertexColor", "aVertexTextureCoords"],
   uniformList   : [	"uPMatrix", "uMVMatrix", "uNMatrix", "uLightPosition", "uWireframe",
-                    "uLa", "uLd", "uLs", "uKa", "uKd", "uKs", "uNs", "d", "illum", "uTranslateLights"
+                    "uLa", "uLd", "uLs", "uKa", "uKd", "uKs", "uNs", "d", "illum", "uTranslateLights",
+                    "uSampler", "uTextures"
                   ],
 
     getShader : function(gl, id) {
@@ -488,7 +660,7 @@ var Program = {
 
 'use strict'
 
-function Mesh(filename, alias) {
+function Mesh(filename, alias, texture) {
   this.filename = filename;
   this.alias   = alias;
   this.ambient = null;
@@ -498,8 +670,8 @@ function Mesh(filename, alias) {
   this.vertices = null;
   this.indices = null;
   this.scalars = null;
-  this.textureCoords = null;
-  this.texture = null;
+  this.texture_coords = null;
+  this.texture = texture || null;
   this.image = null;
   this.tbo = null;
   this.cbo = null;
@@ -532,7 +704,7 @@ Mesh.prototype.getFilename = function() {
 
 Mesh.prototype.setSpecularColor = function(r,g,b) {
   this.Kd = Color.rgb2decimal(r,g,b);
-}
+};
 
 Mesh.prototype.getPosition = function() {
   return this.position;
@@ -558,6 +730,10 @@ Mesh.prototype.getSize = function() {
   return this.size;
 };
 
+Mesh.prototype.setSpecular = function(value) {
+  this.Ns = value;
+};
+
 Mesh.prototype.getAttributes = function() {
   var attributes = {
     "Ni" : this.Ni,
@@ -566,59 +742,86 @@ Mesh.prototype.getAttributes = function() {
     "Kd" : this.Kd,
     "illum" : this.illum,
     "Ks" : this.Ks,
-    "Ns" : this.Ns
+    "Ns" : this.Ns,
+    "texture": this.texture
   };
   return attributes;
 };
 
-Mesh.prototype.draw = function(transforms) {
+Mesh.prototype.defaultCoords = function() {
+  return [0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0];
+};
+
+Mesh.prototype.draw = function() {
   try{
     var object = Scene.getObject(this.getAlias());
-    transforms.calculateModelView();
-    transforms.push();
+    gl.uniform1i(Program.uWireframe, false);
+    if (object.texture_coords) {
+      gl.uniform1i(Program.uTextures, true);
+    } else {
+      gl.uniform1i(Program.uTextures, false);
+    }
+    gl.uniform3fv(Program.uKa, object.Ka);
+    gl.uniform3fv(Program.uKd, object.Kd);
+    gl.uniform3fv(Program.uKs, object.Ks);
+    gl.uniform1f(Program.uNs, object.Ns);
+    gl.uniform1f(Program.d, object.d);
+    gl.uniform1i(Program.illum, object.illum);
 
-    //add transformations
-    if (this.getPosition()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.translate(mv, this.getPosition());
+    gl.enableVertexAttribArray(Program.aVertexPosition);
+    gl.disableVertexAttribArray(Program.aVertexNormal);
+    gl.disableVertexAttribArray(Program.aVertexColor);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
+    gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(Program.aVertexPosition);
+
+
+   if(object.d < 1.0){  //tweaking parameters here
+         gl.uniform1f(Program.d, 0.14);
+        }
+
+    /* texture */
+    if (object.texture_coords) {
+      gl.enableVertexAttribArray(Program.aVertexTextureCoords);
+      gl.bindBuffer(gl.ARRAY_BUFFER, object.tbo);
+      gl.vertexAttribPointer(Program.aVertexTextureCoords, 2, gl.FLOAT, false, 0, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, object.texture.texture);
+      gl.uniform1i(Program.uSampler, 0);
+
     };
 
-    if (this.getSize()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.scale(mv, this.getSize());
-    };
-
-    if (this.getRotation()!=null) {
-
-    };
-
-    transforms.setMatrixUniforms();
-    transforms.pop();
-          gl.enableVertexAttribArray(Program.aVertexPosition);
-          gl.disableVertexAttribArray(Program.aVertexNormal);
-          gl.disableVertexAttribArray(Program.aVertexColor);
-
-          gl.uniform1i(Program.uWireframe, false);
-          gl.uniform3fv(Program.uKa, object.Ka);
-          gl.uniform3fv(Program.uKd, object.Kd);
-          gl.uniform3fv(Program.uKs, object.Ks);
-          gl.uniform1f(Program.uNs, object.Ns);
-          gl.uniform1f(Program.d, object.d);
-          gl.uniform1i(Program.illum, object.illum);
-
-         if(object.d < 1.0){  //tweaking parameters here
-               gl.uniform1f(Program.d, 0.14);
-              }
-
-
-          gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
-          gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
-          gl.enableVertexAttribArray(Program.aVertexPosition);
-
+    /* wireframe */
     if(!object.wireframe){
       gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
       gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(Program.aVertexNormal);
+
+
           }
           else{
               gl.uniform1i(Program.uWireframe, true);
@@ -638,9 +841,17 @@ Mesh.prototype.draw = function(transforms) {
 
   }
   catch(err){
-      alert(err);
       console.error(err.description);
     }
+};
+
+Mesh.prototype.beginDraw = function(transforms) {
+  console.log('beginDraw of' + this.alias);
+  this.draw();
+}
+
+Mesh.prototype.endDraw = function() {
+  console.log('endDraw of ' + this.alias);
 };
 
 var Scene = {
@@ -653,7 +864,7 @@ var Scene = {
         return null;
     },
 
-    loadObject : function(filename,alias,attributes,callback) {
+    loadObject : function(filename,alias,attributes,aubengine) {
         var request = new XMLHttpRequest();
         console.info('Requesting ' + filename);
         request.open("GET",filename);
@@ -667,7 +878,7 @@ var Scene = {
                     var o = JSON.parse(request.responseText);
                     o.alias = (alias==null)?'none':alias;
                     o.remote = true;
-                    Scene.addObject(o,attributes,callback);
+                    Scene.addObject(o,attributes,aubengine);
                 }
             }
         }
@@ -682,14 +893,19 @@ var Scene = {
         }
     },
 
-    addObject : function(object, attributes, callback) {
+    addObject : function(object, attributes, aubengine) {
 
         //deffault object light
         if (object.wireframe        === undefined)    {   object.wireframe        = false;            }
+        if (object.texture          === undefined)    {   object.texture          = false;            }
         if (object.diffuse          === undefined)    {   object.diffuse          = [1.0,1.0,1.0,1.0];}
         if (object.ambient          === undefined)    {   object.ambient          = [0.2,0.2,0.2,1.0];}
         if (object.specular         === undefined)    {   object.specular         = [1.0,1.0,1.0,1.0];}
-
+        if (object.texture_coords) {
+          gl.uniform1i(Program.uTextures, true);
+        } else {
+          gl.uniform1i(Program.uTextures, false);
+        }
         //set attributes
        for(var key in attributes){
 			     object[key] = attributes[key];
@@ -713,23 +929,19 @@ var Scene = {
 
 		var textureBufferObject, tangentBufferObject;
 		if (object.texture_coords){
-			console.info('the object '+object.name+' has texture coordinates');
+			// console.info('the object '+object.alias+' has texture coordinates');
 			textureBufferObject = gl.createBuffer();
 			gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
+
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
 			object.tbo = textureBufferObject;
 
-            tangentBufferObject = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, tangentBufferObject);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateTangents(object.vertices, object.texture_coords, object.indices)), gl.STATIC_DRAW);
-            gl.bindBuffer(gl.ARRAY_BUFFER,null);
-            object.tanbo = tangentBufferObject;
+      tangentBufferObject = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, tangentBufferObject);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateTangents(object.vertices, object.texture_coords, object.indices)), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER,null);
+      object.tanbo = tangentBufferObject;
 		}
-
-        if (object.image){
-            object.texture = new Texture(object.image);
-        }
-
         var indexBufferObject = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferObject);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(object.indices), gl.STATIC_DRAW);
@@ -749,12 +961,10 @@ var Scene = {
          else {
             console.info(object.alias + ' has been added to the scene [Local]');
          }
-
-		 if (callback != undefined){
-			callback(object);
-		 }
-
-     console.log(this.objects);
+    //  
+		//  if (aubengine != undefined) {
+		// 	aubengine.draw();
+    //   };
     },
 
 
@@ -892,14 +1102,14 @@ var Color = {
 
   rgb2decimal: function(r,g,b) {
     return [r/255, g/255, b/255];
+	  
   }
 }
 
 var CAMERA_ORBITING_TYPE = 1;
 var CAMERA_TRACKING_TYPE = 2;
 
-function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
-
+function Camera(alias, t, tFocus, tAzimuth, tElevation) {
     //default parameters
     this.alias      = alias;
     this.matrix     = mat4.create();
@@ -915,7 +1125,8 @@ function Camera(alias, t, tHome, tFocus, tAzimuth, tElevation) {
     this.home       = vec3.create();
 
     //update in drawing
-    this.tHome      = tHome;
+    // this.tHome      = tHome;
+    this.tHome      = vec3.create();
     this.tFocus     = tFocus;
     this.tAzimuth   = tAzimuth;
     this.tElevation = tElevation;
@@ -925,7 +1136,7 @@ Camera.prototype.isMain = function() {
   return this.main;
 };
 
-Camera.prototype.setType = function(t){
+Camera.prototype.setType = function(t) {
 
     this.type = t;
 
@@ -933,7 +1144,11 @@ Camera.prototype.setType = function(t){
         alert('Wrong Camera Type!. Setting Orbitting type by default');
         this.type = CAMERA_ORBITING_TYPE;
     }
-}
+};
+
+Camera.prototype.getAlias = function() {
+  return this.alias;
+};
 
 Camera.prototype.goHome = function(h) {
     if (h != null){
@@ -975,8 +1190,13 @@ Camera.prototype.dolly = function(s){
     c.steps = s;
 }
 
+Camera.prototype.setHome = function(home) {
+  vec3.set(home, this.tHome);
+};
+
 Camera.prototype.setPosition = function(p){
     vec3.set(p, this.position);
+    vec3.set(p, this.tHome);
     this.update();
 }
 
@@ -999,11 +1219,11 @@ Camera.prototype.changeAzimuth = function(az){
     c.update();
 }
 
-Camera.prototype.setElevation = function(el){
+Camera.prototype.setElevation = function(el) {
     this.changeElevation(el - this.elevation);
 }
 
-Camera.prototype.changeElevation = function(el){
+Camera.prototype.changeElevation = function(el) {
     var c = this;
 
     c.elevation +=el;
@@ -1051,6 +1271,7 @@ Camera.prototype.getViewTransform = function(){
     return m;
 };
 
+//draws the main camera
 Camera.prototype.draw = function() {
   this.goHome(this.tHome);
   this.setFocus(this.tFocus);
@@ -1058,17 +1279,27 @@ Camera.prototype.draw = function() {
   this.setElevation(this.tElevation);
 };
 
+Camera.prototype.beginDraw = function() {
+  this.draw();
+  console.log('beginDraw of ' + this.alias);
+};
+
+Camera.prototype.endDraw = function() {
+  console.log('endDraw of ' + this.alias);
+};
+
 var Cameras = {
   list : [],
-  add : function(camera){
+  add : function(camera, position){
 		if (!(camera instanceof Camera)){
 			alert('the parameter is not a light');
 			return;
 		}
+    camera.setPosition(position);
 		this.list.push(camera);
 	},
 
-	getArray: function(type){
+	getArray: function(type) {
 		var a = [];
 		for(var i = 0, max = this.list.length; i < max; i+=1){
 			a = a.concat(this.list[i][type]);
@@ -1308,7 +1539,7 @@ function SceneTransforms(c){
 };
 
 
-SceneTransforms.prototype.calculateModelView = function(){
+SceneTransforms.prototype.calculateModelView = function() {
 	this.mvMatrix = this.camera.getViewTransform();
 };
 
@@ -1338,14 +1569,7 @@ SceneTransforms.prototype.updatePerspective = function(){
 };
 
 
-/**
-* Maps the matrices to shader matrix uniforms
-*
-* Called once per rendering cycle.
-*/
-
-
-SceneTransforms.prototype.setMatrixUniforms = function(){
+SceneTransforms.prototype.setMatrixUniforms = function() {
 	this.calculateNormal();
     gl.uniformMatrix4fv(Program.uMVMatrix, false, this.mvMatrix);
     gl.uniformMatrix4fv(Program.uPMatrix, false, this.pMatrix);
@@ -1353,13 +1577,13 @@ SceneTransforms.prototype.setMatrixUniforms = function(){
 };
 
 
-SceneTransforms.prototype.push = function(){
+SceneTransforms.prototype.push = function() {
 	var memento =  mat4.create();
 	mat4.set(this.mvMatrix, memento);
 	this.stack.push(memento);
 };
 
-SceneTransforms.prototype.pop = function(){
+SceneTransforms.prototype.pop = function() {
 	if(this.stack.length == 0) return;
 	this.mvMatrix  =  this.stack.pop();
 };
@@ -1404,13 +1628,13 @@ function NodeTree(entity, father, children) {
     return this.children.length;
   };
 
-  NodeTree.prototype.nextSibling = function() {
-    return ((!this.isRoot()) && (this.hasSibling())) ? this.father.getChild(this.index() +1) : null;
-  };
-
   NodeTree.prototype.hasSibling = function() {
     return (this.father.existsChild(this.father.getChild(this.index() +1 )));
   }
+
+  NodeTree.prototype.nextSibling = function() {
+    return ((!this.isRoot()) && (this.hasSibling())) ? this.father.getChild(this.index() +1) : null;
+  };
 
   NodeTree.prototype.addChild = function(child) {
     child.setFather(this);
@@ -1449,54 +1673,66 @@ function NodeTree(entity, father, children) {
     return (this.children.indexOf(child) != -1);
   };
 
-  NodeTree.prototype.draw = function() {
-    if (this.entity) {
-      this.entity.draw();
-    } else {
-      console.log('There is no entity for this node');
-    }
+  NodeTree.prototype.getChildren = function() {
+    return this.children;
   };
 
-  NodeTree.prototype.endDraw = function() {
+  NodeTree.prototype.draw = function(transforms) {
+    this.getEntity().beginDraw(transforms);
+    this.getChildren().forEach(function(child) {
+      child.draw(transforms);
+    })
+    this.getEntity().endDraw(transforms);
+  };
 
-  }
+  NodeTree.prototype.save = function(aubengine) {
+    var node = this;
+    if (node.getEntity() instanceof Light) Lights.add(node.getEntity(), node.getFather().getEntity().getPosition());
+      else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity(), node.getFather().getEntity().getPosition());
+      else if (node.getEntity() instanceof Mesh) {
+        Scene.loadObject(node.getEntity().getFilename(),
+                         node.getEntity().getAlias(),
+                         node.getEntity().getAttributes(), aubengine);
+      };
+    node.getChildren().forEach(function(child) {
+      child.save(aubengine);
+    })
+  };
 
 'use strict';
 
   function Tree() {
     this.root = new NodeTree();
+    this.isDraw = false;
   };
 
   Tree.prototype.getRoot = function() {
     return this.root;
   };
 
-  Tree.prototype.preorder = function(node, transforms) {
-    if (node == null) return;
-    if (node.getEntity() instanceof Mesh) node.getEntity().draw(transforms);
-    this.preorder(node.firstChild(), transforms);
-    this.preorder(node.nextSibling(), transforms);
+  Tree.prototype.setDraw = function(draw) {
+    this.isDraw = draw;
   };
 
-  Tree.prototype.save = function(node) {
-    if (node == null) return;
-    if (node.getEntity() instanceof Light) Lights.add(node.getEntity());
-    else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity());
-    else if (node.getEntity() instanceof Mesh) {
-      Scene.loadObject(node.getEntity().getFilename(),
-                       node.getEntity().getAlias(),
-                       node.getEntity().getAttributes());
-    };
-    this.save(node.firstChild());
-    this.save(node.nextSibling());
+  Tree.prototype.getDraw = function() {
+    return this.isDraw;
   };
 
   Tree.prototype.draw = function(transforms) {
-    this.preorder(this.getRoot().firstChild(), transforms);
+    this.getRoot().getChildren().forEach(function(child) {
+      child.draw(transforms);
+    });
   };
 
-  Tree.prototype.saveEntities = function(aubengine) {
-    this.save(this.getRoot().firstChild());
+  Tree.prototype.save = function(aubengine) {
+    this.getRoot().getChildren().forEach(function(child) {
+      child.save(aubengine);
+    });
+  };
+
+  Tree.prototype.saveEntities = function(aubengine, callback) {
+    var self = this;
+    this.save(self.getRoot().firstChild(), aubengine, callback);
   };
 
 var WEBGLAPP_RENDER      = undefined;
@@ -1505,12 +1741,18 @@ var WEBGLAPP_RENDER_RATE = 16;
 
 function Aubengine(canvas, tree) {
     this.interactor = null; //the camera interactor
-    this.transforms = null; //object transformations
+    this.transforms = null;
     this.tree       = new Tree();
 
     gl = Configuration.getGLContext(canvas); //clobal context
 
+    this.camera = null;
     this.canvas = canvas;
+    //drawing loop
+    initialTime = undefined;
+    elapsedTime = undefined;
+    this.frequency = 5;
+
 }
 
 Aubengine.prototype.getTree = function() {
@@ -1521,6 +1763,10 @@ Aubengine.prototype.getRoot = function() {
   return this.tree.getRoot();
 };
 
+Aubengine.prototype.getTransforms = function() {
+  return this.transforms;
+}
+
 Aubengine.prototype.setUpEnvironment = function () {
   gl.clearColor(56/255,161/255,172/255, 1.0);
   gl.clearDepth(1.0);
@@ -1529,47 +1775,36 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  this.loadProgram();
 }
 
-Aubengine.prototype.createCamera = function(alias, home, focus, azimuth, elevation) {
-  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, home, focus, azimuth, elevation);
+Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
+  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, focus, azimuth, elevation);
   return camera;
 };
 
 Aubengine.prototype.setMainCamera = function(camera) {
-  camera.draw(); //provisional
+  this.camera     = camera;
   this.interactor = new CameraInteractor(camera, this.canvas);
   this.transforms = new SceneTransforms(camera);
-  this.transforms.init();       //global transforms
-  interactor = this.interactor; //global interactor
-}
 
-Aubengine.prototype.loadProgram = function(translateLights) {
+  transforms = this.transforms;
+  interactor = this.interactor;
+  transforms.init();
+
+};
+
+Aubengine.prototype.loadProgram = function() {
   Program.load();
-
-  //lights uniform vector, uses PHONG
-  gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
-  gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));
-  gl.uniform3fv(Program.uLd, Lights.getArray('diffuse'));
-  gl.uniform3fv(Program.uLs, Lights.getArray('specular'));
-
-  //object properties uniform vector
-  gl.uniform3fv(Program.uKa, [1.0,1.0,1.0]);
-  gl.uniform3fv(Program.uKd, [1.0,1.0,1.0]);
-  gl.uniform3fv(Program.uKs, [1.0,1.0,1.0]);
-
-  gl.uniform1f(Program.uNs, 1.0);
-  gl.uniform1i(Program.uTranslateLights, translateLights || false);
 }
 
-Aubengine.prototype.createMesh = function(filename, alias) {
-  var mesh = new Mesh(filename, alias);
+Aubengine.prototype.createMesh = function(filename, alias, texture) {
+  var mesh = new Mesh(filename, alias, texture);
   return mesh;
 };
 
-// Aubengine.prototype.addModel = function(filename, alias, attributes, callback) {
-//   Scene.loadObject(filename,alias,attributes,callback); //drawing
-// };
 
 Aubengine.prototype.addFloor = function(visible) {
   Floor.build(80,2);
@@ -1583,18 +1818,22 @@ Aubengine.prototype.addFloor = function(visible) {
   Floor.visible = visible;
 };
 
-Aubengine.prototype.createLight = function(name, position, diffuse, ambient, specular) {
-      if ((name == null) || (position == null) || (diffuse == null) || (ambient == null) || (specular == null)) {
+Aubengine.prototype.createLight = function(name, diffuse, ambient, specular) {
+      if ((name == null) || (diffuse == null) || (ambient == null) || (specular == null)) {
         alert('Light can not be created! Wrong parameters.');
       } else {
         var light = new Light(name);
-        light.setPosition(position);
         light.setDiffuse(diffuse);
         light.setAmbient(ambient);
         light.setSpecular(specular);
-      }
+      };
 
       return light;
+};
+
+Aubengine.prototype.createTransformation = function(name, position, size, rotation) {
+  var transformation = new Transformation(name, position, size, rotation);
+  return transformation;
 };
 
 Aubengine.prototype.addNode = function(father, node) {
@@ -1606,35 +1845,10 @@ Aubengine.prototype.createNode = function(entity) {
   return node;
 };
 
-
 Aubengine.prototype.draw = function() {
-  this.loadProgram(false);
+  var self = this;
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  this.transforms.updatePerspective();
-
-  this.tree.draw(this.transforms);
- }
-
-Aubengine.prototype.start = function() {
-        WEBGLAPP_RENDER = this.draw;
-        renderLoop();
- }
-
-Aubengine.prototype.refresh = function(){
-    if (WEBGLAPP_RENDER) WEBGLAPP_RENDER(false);
- }
-
-renderLoop = function(){
-     WEBGLAPP_TIMER_ID = setInterval(WEBGLAPP_RENDER, WEBGLAPP_RENDER_RATE);
-}
-
-window.onblur = function(){
-    clearInterval(WEBGLAPP_TIMER_ID);
-    console.info('Rendering stopped');
-}
-
-window.onfocus = function(){
-    renderLoop();
-    console.info('Rendering resumed');
-}
+  self.transforms.updatePerspective();
+  self.getTree().draw(self.transforms);
+};

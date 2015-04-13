@@ -141,7 +141,7 @@ obj = {}
 obj["version"] = version
 obj["filename"] = filename
 obj["meshname"] = meshname
-obj["positions"] = linealize(positions)
+obj["vertices"] = linealize(positions)
 obj["normals"] = linealize(normals)
 if len(indices):
     obj["indices"] = indices

@@ -8,7 +8,7 @@ function SceneTransforms(c){
 };
 
 
-SceneTransforms.prototype.calculateModelView = function(){
+SceneTransforms.prototype.calculateModelView = function() {
 	this.mvMatrix = this.camera.getViewTransform();
 };
 
@@ -38,14 +38,7 @@ SceneTransforms.prototype.updatePerspective = function(){
 };
 
 
-/**
-* Maps the matrices to shader matrix uniforms
-*
-* Called once per rendering cycle.
-*/
-
-
-SceneTransforms.prototype.setMatrixUniforms = function(){
+SceneTransforms.prototype.setMatrixUniforms = function() {
 	this.calculateNormal();
     gl.uniformMatrix4fv(Program.uMVMatrix, false, this.mvMatrix);
     gl.uniformMatrix4fv(Program.uPMatrix, false, this.pMatrix);
@@ -53,13 +46,13 @@ SceneTransforms.prototype.setMatrixUniforms = function(){
 };
 
 
-SceneTransforms.prototype.push = function(){
+SceneTransforms.prototype.push = function() {
 	var memento =  mat4.create();
 	mat4.set(this.mvMatrix, memento);
 	this.stack.push(memento);
 };
 
-SceneTransforms.prototype.pop = function(){
+SceneTransforms.prototype.pop = function() {
 	if(this.stack.length == 0) return;
 	this.mvMatrix  =  this.stack.pop();
 };

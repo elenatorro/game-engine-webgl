@@ -4,8 +4,6 @@
 <meta http-equiv='content-type' content='text/html; charset=ISO-8859-1'>
 <link href='assets/styles/bootstrap.min.css'   type='text/css' rel='stylesheet'>
 <link href='assets/styles/style.css'   type='text/css' rel='stylesheet'>
-
-
 <script type='text/javascript' src='dist/dependencies.js'></script>
 <script type='text/javascript' src='dist/Aubengine.js'></script>
 
@@ -14,71 +12,125 @@
 
 var aubengine;
 
-function runShowRoom(){
+function endDraw() {
+  console.log("END DRAAAW");
+};
+
+function runShowRoom() {
   aubengine = new Aubengine("the-canvas");
+  var cubeTexture = new Texture('textures/marble.png');
   aubengine.setUpEnvironment();
   //create main camera
-  var camera = aubengine.createCamera('main',[0.0,0.2,7],[0.0,0.0,0.0], 10,-11);
-
+  var camera1          = aubengine.createCamera('camera1',[0.0,0.0,0.0], 10,-11);
+  var camera2          = aubengine.createCamera('camera2',[0.0,10.0,10.0], -700,-70); //from the cube
+  var camera1Pos       = [0.0,0.2,7];
+  var camera1Transform = aubengine.createTransformation('camera1Trans', camera1Pos);
   //create main four lights
-  var fleft  = aubengine.createLight('fleft', [-25,25,-25],[0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
-  var fright = aubengine.createLight('fright',[ 25,25,-25 ] ,[0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
-  var nleft  = aubengine.createLight('nleft', [-25,25, 25 ],[0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
-  var nright = aubengine.createLight('nright',[ 25,25, 25  ],[0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
+  var light1Pos = [-25,25,-25];
+  var light2Pos = [ 25,25,-25];
+  var light3Pos = [ -25,25,-25];
+  var light4Pos = [ -25,-25,25];
+
+  var light1Transform = aubengine.createTransformation('light1Trans', light1Pos);
+  var light2Transform = aubengine.createTransformation('light2Trans', light2Pos);
+  var light3Transform = aubengine.createTransformation('light2Trans', light3Pos);
+  var light4Transform = aubengine.createTransformation('light2Trans', light4Pos);
+
+  var spherePos  = [2,1,0];
+  var sphereSize = [1.5, 1.5, 1.5];
+  var sphereTransform = aubengine.createTransformation('sphereTrans', spherePos, sphereSize);
+
+  var cubePos  = [0,-1,0];
+  var cubeSize = [1,1,1];
+  var cubeRot  = {angle: 86, axis: [0,2,1]};
+  var cubeTransform = aubengine.createTransformation('cubeTrans', cubePos, cubeSize, cubeRot);
+
+  var chairPos  = [-1,-4,-10];
+  var chairSize = [0.2, 0.2, 0.2];
+  var chairRot  = {angle: 10, axis: [0,1,0]};
+  var chairTransform = aubengine.createTransformation('chairTrans', chairPos, chairSize, chairRot);
+
+  var fleft  = aubengine.createLight('fleft',  [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
+  var fright = aubengine.createLight('fright', [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
+  var nleft  = aubengine.createLight('nleft',  [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
+  var nright = aubengine.createLight('nright', [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
 
   //create some meshes
-  var cube  = aubengine.createMesh('models/simpleCube.json', 'cube');
-  cube.setPosition([1,1,0]);
-  cube.setSize([1.5, 1.5, 1.5]);
-  cube.setSpecularColor(255, 123, 19);
+  var cube  = aubengine.createMesh('models/complexCube.json', 'cube', cubeTexture);
+  // cube.setSpecularColor(255, 123, 19);
 
   var sphere = aubengine.createMesh('models/sphere.json', 'sphere');
-  sphere.setPosition([0,-1,1]);
-  sphere.setSize([1,1,1]);
   sphere.setSpecularColor(40, 255, 255);
 
-  var chair = aubengine.createMesh('models/chair.json', 'chair');
-  chair.setPosition([-2,-1,-2]);
-  chair.setSize([0.3,0.3,0.3]);
+  var chair = aubengine.createMesh('models/valla.json', 'chair');
   chair.setSpecularColor(255, 30, 120);
 
-  var cone = aubengine.createMesh('models/cone.json', 'cone');
-  cone.setPosition([0,0,1]);
-  cone.setSize([0.2,0.2,0.2]);
-  cone.setSpecularColor(160, 255, 20);
-  //scene tree
-  var cameraNode = aubengine.createNode(camera);
-  aubengine.addNode(aubengine.getRoot(), cameraNode);
 
+  /* SCENE TREE */
+  var transform0 = aubengine.createNode(camera1Transform);
+  aubengine.addNode(aubengine.getRoot(), transform0);
+  var cameraNode1 = aubengine.createNode(camera1);
+  aubengine.addNode(transform0, cameraNode1);
+
+  //light1
+  var transform1 = aubengine.createNode(light1Transform);
+  aubengine.addNode(aubengine.getRoot(), transform1);
   var fleftNode = aubengine.createNode(fleft);
-  aubengine.addNode(aubengine.getRoot(), fleftNode);
+  aubengine.addNode(transform1, fleftNode);
 
+  //light2
+  var transform2 = aubengine.createNode(light2Transform);
+  aubengine.addNode(aubengine.getRoot(), transform2);
+  var frightNode = aubengine.createNode(fright);
+  aubengine.addNode(transform2, frightNode);
+
+  //light3
+  var transform3 = aubengine.createNode(light3Transform);
+  aubengine.addNode(aubengine.getRoot(), transform3);
+  var nleftNode = aubengine.createNode(nleft);
+  aubengine.addNode(transform3, nleftNode);
+
+  //light4
+  var transform4 = aubengine.createNode(light4Transform);
+  aubengine.addNode(aubengine.getRoot(), transform4);
   var nrightNode = aubengine.createNode(nright);
-  aubengine.addNode(aubengine.getRoot(), nrightNode);
-  //**//
+  aubengine.addNode(transform4, nrightNode);
 
 
-  var meshNode = aubengine.createNode(cube);
-  aubengine.addNode(aubengine.getRoot(), meshNode);
+  //mesh1
+  var transform5 = aubengine.createNode(sphereTransform);
+  aubengine.addNode(aubengine.getRoot(), transform5);
+  var meshNode = aubengine.createNode(sphere);
+  aubengine.addNode(transform5, meshNode);
 
-  var meshNode2 = aubengine.createNode(sphere);
-  aubengine.addNode(meshNode, meshNode2);
+  var transform7 = aubengine.createNode(chairTransform);
+  chairTransform.animate(1, aubengine, 100, chairTransform.translate, [chairTransform.position, [0.05,0,0]]);
+  chairTransform.animate(15, aubengine, 50, chairTransform.rotate, [chairTransform.rotation, {angle: 5, axis: [0,0,0]}]);
 
+  aubengine.addNode(aubengine.getRoot(), transform7);
   var meshNode3 = aubengine.createNode(chair);
-  aubengine.addNode(aubengine.getRoot(), meshNode3);
+  aubengine.addNode(transform7, meshNode3);
 
-  var meshNode4 = aubengine.createNode(cone);
-  aubengine.addNode(meshNode3, meshNode4);
+  //mesh2
+  // var transform6 = aubengine.createNode(cubeTransform);
+  // aubengine.addNode(aubengine.getRoot(), transform6);
+  // var meshNode2 = aubengine.createNode(cube);
+  // aubengine.addNode(transform6, meshNode2);
+  // var cameraNode2 = aubengine.createNode(camera2);
+  // aubengine.addNode(transform6, cameraNode2);
 
-  aubengine.getTree().saveEntities(aubengine);
-
-  aubengine.setMainCamera(camera);
+  aubengine.getTree().saveEntities(aubengine, endDraw);
+  aubengine.setMainCamera(Cameras.get(0));
+  var animation = new Animation(2, aubengine, 100);
+  animation.startAnimation();
+  chairTransform.startAnimation();
+  // animation.stopAnimation();
 };
 
 </script>
 </head>
 
-<body onload="runShowRoom(draw)">
+<body onload="runShowRoom()">
 <div id="header">
     <h1>Aubengine</h1>
     <button id="draw" class="btn btn-default">draw</button>
@@ -91,6 +143,7 @@ function runShowRoom(){
 <script type='text/javascript'>resizeCanvas();</script>
 <script type='text/javascript'>document.getElementById('draw').addEventListener('click', function(event) {
   aubengine.draw();
-});</script>
+})
+  </script>
 </body>
 </html>

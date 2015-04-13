@@ -8,8 +8,10 @@ var connect    = require('gulp-connect');
 
 var files      =    ['src/gl-matrix-min.js',
                      'src/Globals.js',
+                     'src/Animations.js',
                      'src/Configuration.js',
-                     'src/FrameAnimation.js',
+                     'src/Transformations.js',
+                     'src/Texture.js',
                      'src/Lights.js',
                      'src/Shaders.js',
                      'src/Program.js',
@@ -62,7 +64,7 @@ gulp.task('watch', function() {
 gulp.task('connect', function () {
   connect.server({
     root: ['examples', './'],
-    port: 8000
+    port: 1058
   });
 });
 

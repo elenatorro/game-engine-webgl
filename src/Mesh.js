@@ -1,6 +1,6 @@
 'use strict'
 
-function Mesh(filename, alias) {
+function Mesh(filename, alias, texture) {
   this.filename = filename;
   this.alias   = alias;
   this.ambient = null;
@@ -10,8 +10,8 @@ function Mesh(filename, alias) {
   this.vertices = null;
   this.indices = null;
   this.scalars = null;
-  this.textureCoords = null;
-  this.texture = null;
+  this.texture_coords = null;
+  this.texture = texture || null;
   this.image = null;
   this.tbo = null;
   this.cbo = null;
@@ -44,7 +44,7 @@ Mesh.prototype.getFilename = function() {
 
 Mesh.prototype.setSpecularColor = function(r,g,b) {
   this.Kd = Color.rgb2decimal(r,g,b);
-}
+};
 
 Mesh.prototype.getPosition = function() {
   return this.position;
@@ -70,6 +70,10 @@ Mesh.prototype.getSize = function() {
   return this.size;
 };
 
+Mesh.prototype.setSpecular = function(value) {
+  this.Ns = value;
+};
+
 Mesh.prototype.getAttributes = function() {
   var attributes = {
     "Ni" : this.Ni,
@@ -78,59 +82,86 @@ Mesh.prototype.getAttributes = function() {
     "Kd" : this.Kd,
     "illum" : this.illum,
     "Ks" : this.Ks,
-    "Ns" : this.Ns
+    "Ns" : this.Ns,
+    "texture": this.texture
   };
   return attributes;
 };
 
-Mesh.prototype.draw = function(transforms) {
+Mesh.prototype.defaultCoords = function() {
+  return [0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0,
+					0.0, 0.0,
+					0.0, 0.0,
+					1.0, 0.0,
+					1.0, 1.0,
+					0.0, 1.0];
+};
+
+Mesh.prototype.draw = function() {
   try{
     var object = Scene.getObject(this.getAlias());
-    transforms.calculateModelView();
-    transforms.push();
+    gl.uniform1i(Program.uWireframe, false);
+    if (object.texture_coords) {
+      gl.uniform1i(Program.uTextures, true);
+    } else {
+      gl.uniform1i(Program.uTextures, false);
+    }
+    gl.uniform3fv(Program.uKa, object.Ka);
+    gl.uniform3fv(Program.uKd, object.Kd);
+    gl.uniform3fv(Program.uKs, object.Ks);
+    gl.uniform1f(Program.uNs, object.Ns);
+    gl.uniform1f(Program.d, object.d);
+    gl.uniform1i(Program.illum, object.illum);
 
-    //add transformations
-    if (this.getPosition()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.translate(mv, this.getPosition());
+    gl.enableVertexAttribArray(Program.aVertexPosition);
+    gl.disableVertexAttribArray(Program.aVertexNormal);
+    gl.disableVertexAttribArray(Program.aVertexColor);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
+    gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(Program.aVertexPosition);
+
+
+   if(object.d < 1.0){  //tweaking parameters here
+         gl.uniform1f(Program.d, 0.14);
+        }
+
+    /* texture */
+    if (object.texture_coords) {
+      gl.enableVertexAttribArray(Program.aVertexTextureCoords);
+      gl.bindBuffer(gl.ARRAY_BUFFER, object.tbo);
+      gl.vertexAttribPointer(Program.aVertexTextureCoords, 2, gl.FLOAT, false, 0, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, object.texture.texture);
+      gl.uniform1i(Program.uSampler, 0);
+
     };
 
-    if (this.getSize()!=null) {
-      var mv = transforms.mvMatrix;
-      mat4.scale(mv, this.getSize());
-    };
-
-    if (this.getRotation()!=null) {
-
-    };
-
-    transforms.setMatrixUniforms();
-    transforms.pop();
-          gl.enableVertexAttribArray(Program.aVertexPosition);
-          gl.disableVertexAttribArray(Program.aVertexNormal);
-          gl.disableVertexAttribArray(Program.aVertexColor);
-
-          gl.uniform1i(Program.uWireframe, false);
-          gl.uniform3fv(Program.uKa, object.Ka);
-          gl.uniform3fv(Program.uKd, object.Kd);
-          gl.uniform3fv(Program.uKs, object.Ks);
-          gl.uniform1f(Program.uNs, object.Ns);
-          gl.uniform1f(Program.d, object.d);
-          gl.uniform1i(Program.illum, object.illum);
-
-         if(object.d < 1.0){  //tweaking parameters here
-               gl.uniform1f(Program.d, 0.14);
-              }
-
-
-          gl.bindBuffer(gl.ARRAY_BUFFER, object.vbo);
-          gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
-          gl.enableVertexAttribArray(Program.aVertexPosition);
-
+    /* wireframe */
     if(!object.wireframe){
       gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
       gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(Program.aVertexNormal);
+
+
           }
           else{
               gl.uniform1i(Program.uWireframe, true);
@@ -150,7 +181,15 @@ Mesh.prototype.draw = function(transforms) {
 
   }
   catch(err){
-      alert(err);
       console.error(err.description);
     }
+};
+
+Mesh.prototype.beginDraw = function(transforms) {
+  console.log('beginDraw of' + this.alias);
+  this.draw();
+}
+
+Mesh.prototype.endDraw = function() {
+  console.log('endDraw of ' + this.alias);
 };

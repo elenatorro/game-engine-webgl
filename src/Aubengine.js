@@ -4,12 +4,18 @@ var WEBGLAPP_RENDER_RATE = 16;
 
 function Aubengine(canvas, tree) {
     this.interactor = null; //the camera interactor
-    this.transforms = null; //object transformations
+    this.transforms = null;
     this.tree       = new Tree();
 
     gl = Configuration.getGLContext(canvas); //clobal context
 
+    this.camera = null;
     this.canvas = canvas;
+    //drawing loop
+    initialTime = undefined;
+    elapsedTime = undefined;
+    this.frequency = 5;
+
 }
 
 Aubengine.prototype.getTree = function() {
@@ -20,6 +26,10 @@ Aubengine.prototype.getRoot = function() {
   return this.tree.getRoot();
 };
 
+Aubengine.prototype.getTransforms = function() {
+  return this.transforms;
+}
+
 Aubengine.prototype.setUpEnvironment = function () {
   gl.clearColor(56/255,161/255,172/255, 1.0);
   gl.clearDepth(1.0);
@@ -28,47 +38,36 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  this.loadProgram();
 }
 
-Aubengine.prototype.createCamera = function(alias, home, focus, azimuth, elevation) {
-  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, home, focus, azimuth, elevation);
+Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
+  var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, focus, azimuth, elevation);
   return camera;
 };
 
 Aubengine.prototype.setMainCamera = function(camera) {
-  camera.draw(); //provisional
+  this.camera     = camera;
   this.interactor = new CameraInteractor(camera, this.canvas);
   this.transforms = new SceneTransforms(camera);
-  this.transforms.init();       //global transforms
-  interactor = this.interactor; //global interactor
-}
 
-Aubengine.prototype.loadProgram = function(translateLights) {
+  transforms = this.transforms;
+  interactor = this.interactor;
+  transforms.init();
+
+};
+
+Aubengine.prototype.loadProgram = function() {
   Program.load();
-
-  //lights uniform vector, uses PHONG
-  gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
-  gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));
-  gl.uniform3fv(Program.uLd, Lights.getArray('diffuse'));
-  gl.uniform3fv(Program.uLs, Lights.getArray('specular'));
-
-  //object properties uniform vector
-  gl.uniform3fv(Program.uKa, [1.0,1.0,1.0]);
-  gl.uniform3fv(Program.uKd, [1.0,1.0,1.0]);
-  gl.uniform3fv(Program.uKs, [1.0,1.0,1.0]);
-
-  gl.uniform1f(Program.uNs, 1.0);
-  gl.uniform1i(Program.uTranslateLights, translateLights || false);
 }
 
-Aubengine.prototype.createMesh = function(filename, alias) {
-  var mesh = new Mesh(filename, alias);
+Aubengine.prototype.createMesh = function(filename, alias, texture) {
+  var mesh = new Mesh(filename, alias, texture);
   return mesh;
 };
 
-// Aubengine.prototype.addModel = function(filename, alias, attributes, callback) {
-//   Scene.loadObject(filename,alias,attributes,callback); //drawing
-// };
 
 Aubengine.prototype.addFloor = function(visible) {
   Floor.build(80,2);
@@ -82,18 +81,22 @@ Aubengine.prototype.addFloor = function(visible) {
   Floor.visible = visible;
 };
 
-Aubengine.prototype.createLight = function(name, position, diffuse, ambient, specular) {
-      if ((name == null) || (position == null) || (diffuse == null) || (ambient == null) || (specular == null)) {
+Aubengine.prototype.createLight = function(name, diffuse, ambient, specular) {
+      if ((name == null) || (diffuse == null) || (ambient == null) || (specular == null)) {
         alert('Light can not be created! Wrong parameters.');
       } else {
         var light = new Light(name);
-        light.setPosition(position);
         light.setDiffuse(diffuse);
         light.setAmbient(ambient);
         light.setSpecular(specular);
-      }
+      };
 
       return light;
+};
+
+Aubengine.prototype.createTransformation = function(name, position, size, rotation) {
+  var transformation = new Transformation(name, position, size, rotation);
+  return transformation;
 };
 
 Aubengine.prototype.addNode = function(father, node) {
@@ -105,35 +108,10 @@ Aubengine.prototype.createNode = function(entity) {
   return node;
 };
 
-
 Aubengine.prototype.draw = function() {
-  this.loadProgram(false);
+  var self = this;
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  this.transforms.updatePerspective();
-
-  this.tree.draw(this.transforms);
- }
-
-Aubengine.prototype.start = function() {
-        WEBGLAPP_RENDER = this.draw;
-        renderLoop();
- }
-
-Aubengine.prototype.refresh = function(){
-    if (WEBGLAPP_RENDER) WEBGLAPP_RENDER(false);
- }
-
-renderLoop = function(){
-     WEBGLAPP_TIMER_ID = setInterval(WEBGLAPP_RENDER, WEBGLAPP_RENDER_RATE);
-}
-
-window.onblur = function(){
-    clearInterval(WEBGLAPP_TIMER_ID);
-    console.info('Rendering stopped');
-}
-
-window.onfocus = function(){
-    renderLoop();
-    console.info('Rendering resumed');
-}
+  self.transforms.updatePerspective();
+  self.getTree().draw(self.transforms);
+};
