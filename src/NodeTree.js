@@ -83,14 +83,28 @@ function NodeTree(entity, father, children) {
     return (this.children.indexOf(child) != -1);
   };
 
-  NodeTree.prototype.draw = function() {
-    if (this.entity) {
-      this.entity.draw();
-    } else {
-      console.log('There is no entity for this node');
-    }
+  NodeTree.prototype.getChildren = function() {
+    return this.children;
   };
 
-  NodeTree.prototype.endDraw = function() {
+  NodeTree.prototype.draw = function(transforms) {
+    this.getEntity().beginDraw(transforms);
+    this.getChildren().forEach(function(child) {
+      child.draw(transforms);
+    })
+    this.getEntity().endDraw(transforms);
+  };
 
-  }
+  NodeTree.prototype.save = function(aubengine) {
+    var node = this;
+    if (node.getEntity() instanceof Light) Lights.add(node.getEntity(), node.getFather().getEntity().getPosition());
+      else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity(), node.getFather().getEntity().getPosition());
+      else if (node.getEntity() instanceof Mesh) {
+        Scene.loadObject(node.getEntity().getFilename(),
+                         node.getEntity().getAlias(),
+                         node.getEntity().getAttributes(), aubengine);
+      };
+    node.getChildren().forEach(function(child) {
+      child.save(aubengine);
+    })
+  };
