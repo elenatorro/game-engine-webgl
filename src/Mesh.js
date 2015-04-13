@@ -118,9 +118,12 @@ Mesh.prototype.defaultCoords = function() {
 Mesh.prototype.draw = function() {
   try{
     var object = Scene.getObject(this.getAlias());
-
-
     gl.uniform1i(Program.uWireframe, false);
+    if (object.texture_coords) {
+      gl.uniform1i(Program.uTextures, true);
+    } else {
+      gl.uniform1i(Program.uTextures, false);
+    }
     gl.uniform3fv(Program.uKa, object.Ka);
     gl.uniform3fv(Program.uKd, object.Kd);
     gl.uniform3fv(Program.uKs, object.Ks);
@@ -136,23 +139,20 @@ Mesh.prototype.draw = function() {
     gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(Program.aVertexPosition);
 
+
    if(object.d < 1.0){  //tweaking parameters here
          gl.uniform1f(Program.d, 0.14);
         }
+
     /* texture */
     if (object.texture_coords) {
-      // console.info('the object '+object.alias+' has texture coordinates');
-      //
-      textureBufferObject = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
-
-      gl.uniform1i(Program.uTextures, 1);
       gl.enableVertexAttribArray(Program.aVertexTextureCoords);
+      gl.bindBuffer(gl.ARRAY_BUFFER, object.tbo);
       gl.vertexAttribPointer(Program.aVertexTextureCoords, 2, gl.FLOAT, false, 0, 0);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, object.texture.getTexture());
+      gl.bindTexture(gl.TEXTURE_2D, object.texture.texture);
       gl.uniform1i(Program.uSampler, 0);
+
     };
 
     /* wireframe */
@@ -160,6 +160,8 @@ Mesh.prototype.draw = function() {
       gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
       gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(Program.aVertexNormal);
+
+
           }
           else{
               gl.uniform1i(Program.uWireframe, true);
@@ -177,7 +179,6 @@ Mesh.prototype.draw = function() {
           gl.bindBuffer(gl.ARRAY_BUFFER, null);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
-
   }
   catch(err){
       console.error(err.description);
@@ -185,10 +186,10 @@ Mesh.prototype.draw = function() {
 };
 
 Mesh.prototype.beginDraw = function(transforms) {
-  console.log('begin draw' + this.alias);
+  console.log('beginDraw of' + this.alias);
   this.draw();
 }
 
 Mesh.prototype.endDraw = function() {
-  console.log('end draw ' + this.alias);
+  console.log('endDraw of ' + this.alias);
 };
