@@ -45,7 +45,11 @@ var Scene = {
         if (object.diffuse          === undefined)    {   object.diffuse          = [1.0,1.0,1.0,1.0];}
         if (object.ambient          === undefined)    {   object.ambient          = [0.2,0.2,0.2,1.0];}
         if (object.specular         === undefined)    {   object.specular         = [1.0,1.0,1.0,1.0];}
-
+        if (object.texture_coords) {
+          gl.uniform1i(Program.uTextures, true);
+        } else {
+          gl.uniform1i(Program.uTextures, false);
+        }
         //set attributes
        for(var key in attributes){
 			     object[key] = attributes[key];
@@ -76,13 +80,12 @@ var Scene = {
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
 			object.tbo = textureBufferObject;
 
-            tangentBufferObject = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, tangentBufferObject);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateTangents(object.vertices, object.texture_coords, object.indices)), gl.STATIC_DRAW);
-            gl.bindBuffer(gl.ARRAY_BUFFER,null);
-            object.tanbo = tangentBufferObject;
+      tangentBufferObject = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, tangentBufferObject);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateTangents(object.vertices, object.texture_coords, object.indices)), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER,null);
+      object.tanbo = tangentBufferObject;
 		}
-
         var indexBufferObject = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferObject);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(object.indices), gl.STATIC_DRAW);
@@ -102,10 +105,10 @@ var Scene = {
          else {
             console.info(object.alias + ' has been added to the scene [Local]');
          }
-
-		 if (aubengine != undefined){
-			aubengine.draw();
-		 }
+    //  
+		//  if (aubengine != undefined) {
+		// 	aubengine.draw();
+    //   };
     },
 
 
