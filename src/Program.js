@@ -3,7 +3,7 @@ var Program = {
   attributeList : ["aVertexPosition", "aVertexNormal", "aVertexColor", "aVertexTextureCoords"],
   uniformList   : [	"uPMatrix", "uMVMatrix", "uNMatrix", "uLightPosition", "uWireframe",
                     "uLa", "uLd", "uLs", "uKa", "uKd", "uKs", "uNs", "d", "illum", "uTranslateLights",
-                    "uSampler", "uTexture"
+                    "uSampler", "uTextures"
                   ],
 
     getShader : function(gl, id) {

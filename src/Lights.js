@@ -37,13 +37,13 @@ Light.prototype.setProperty = function(pName, pValue) {
 };
 
 Light.prototype.beginDraw = function(transforms) {
-	transforms.push();
-	Lights.draw();
+	var self = this;
+	Lights.draw(self, transforms);
+	console.log('beginDraw of ' + this.id);
 };
 
 Light.prototype.endDraw = function(transforms) {
-	transforms.pop();
-	console.log('end draw ' + this.id);
+	console.log('endDraw of ' + this.id);
 };
 
 var Lights = {
@@ -86,7 +86,7 @@ var Lights = {
 	},
 
 	//draws all the lights
-	draw: function() {
+	draw: function(light, transforms) {
 		//lights uniform vector, uses PHONG
 		gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
 		gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));

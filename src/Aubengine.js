@@ -11,6 +11,11 @@ function Aubengine(canvas, tree) {
 
     this.camera = null;
     this.canvas = canvas;
+    //drawing loop
+    initialTime = undefined;
+    elapsedTime = undefined;
+    this.frequency = 5;
+
 }
 
 Aubengine.prototype.getTree = function() {
@@ -100,37 +105,13 @@ Aubengine.prototype.addNode = function(father, node) {
 
 Aubengine.prototype.createNode = function(entity) {
   var node = new NodeTree(entity);
-  console.log(node);
   return node;
 };
 
-
 Aubengine.prototype.draw = function() {
+  var self = this;
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  this.transforms.updatePerspective();
-  this.tree.draw(this.transforms);
- }
-
-Aubengine.prototype.start = function() {
-        WEBGLAPP_RENDER = this.draw;
-        renderLoop();
- }
-
-Aubengine.prototype.refresh = function(){
-    if (WEBGLAPP_RENDER) WEBGLAPP_RENDER(false);
- }
-
-renderLoop = function(){
-     WEBGLAPP_TIMER_ID = setInterval(WEBGLAPP_RENDER, WEBGLAPP_RENDER_RATE);
-}
-
-window.onblur = function(){
-    clearInterval(WEBGLAPP_TIMER_ID);
-    console.info('Rendering stopped');
-}
-
-window.onfocus = function(){
-    renderLoop();
-    console.info('Rendering resumed');
-}
+  self.transforms.updatePerspective();
+  self.getTree().draw(self.transforms);
+};

@@ -2,6 +2,7 @@ function Texture(img){
 	this.texture = gl.createTexture();
 	this.image = new Image();
 	var self = this;
+	this.image.src = img;
 	this.image.onload = function() {
 		gl.bindTexture(gl.TEXTURE_2D, self.texture);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, self.image);
@@ -10,8 +11,6 @@ function Texture(img){
 		gl.generateMipmap(gl.TEXTURE_2D);
 		gl.bindTexture(gl.TEXTURE_2D, null);
 	}
-
-	this.image.src = img;
 };
 
 Texture.prototype.getTexture = function() {

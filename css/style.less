@@ -1,0 +1,111 @@
+/****** VARIABLES *****/
+
+/* Screen width */
+@screen-sm-min : 768px;
+@screen-md-min : 992px;
+@screen-lg-min : 1200px;
+
+/****  COLORES  ****/
+
+@cl-aubergine	:	#6c0093;
+@cl-grey-dark	:	#555;
+
+
+
+
+
+/***** STYLE  *****/
+
+/* Extra small devices (phones, less than 768px) */
+/* No media query since this is the default in Bootstrap */
+
+body{
+	
+	color: @cl-grey-dark;
+	
+	h2, h3 {
+		
+		color: #000;
+	
+	}
+	
+	h4{
+		color: @cl-aubergine;
+	}
+    
+    header{
+       
+        border-bottom: 3px solid @cl-aubergine;
+		color: @cl-aubergine;
+    }
+	
+	
+
+    
+    
+    .tools{
+        
+        //background: #f00;
+        //min-height: 500px;
+        
+    }
+    
+    .col-canvas{
+        
+        #the-canvas{
+			margin-top: 20px;
+            background: #c1c1c1;
+            width: 100%;
+
+        }
+    }
+	
+	
+	footer{
+		color: #fff;
+		background-color: @cl-aubergine;
+		
+		min-height: 100px;
+		padding-top: 20px;
+	
+	}
+	
+	label{
+		color: @cl-grey-dark;
+		font-weight: normal;
+	}
+	
+	.btn-default{
+		
+		background: lighten(@cl-aubergine, 10%);
+		color: #fff;	
+		
+		&:hover{
+			background: @cl-aubergine;
+			color: #fff;
+		}
+	
+	}
+
+
+
+}
+
+
+
+
+
+/* Small devices (tablets, 768px and up) */
+@media (min-width: @screen-sm-min) {
+
+}
+
+/* Medium devices (desktops, 992px and up) */
+@media (min-width: @screen-md-min) {
+
+}
+
+/* Large devices (large desktops, 1200px and up) */
+@media (min-width: @screen-lg-min) {
+
+}

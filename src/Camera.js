@@ -172,13 +172,12 @@ Camera.prototype.draw = function() {
 };
 
 Camera.prototype.beginDraw = function() {
-  transforms.push();
   this.draw();
+  console.log('beginDraw of ' + this.alias);
 };
 
 Camera.prototype.endDraw = function() {
-  transforms.pop();
-  console.log('end of draw ' + this.alias);
+  console.log('endDraw of ' + this.alias);
 };
 
 var Cameras = {
