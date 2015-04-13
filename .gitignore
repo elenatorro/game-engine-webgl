@@ -25,7 +25,8 @@ nbproject
 ############################
 testApp
 coverage
-
+models/*.obj
+converter/*.obj
 
 ############################
 # Other
