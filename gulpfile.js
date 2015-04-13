@@ -8,8 +8,8 @@ var connect    = require('gulp-connect');
 
 var files      =    ['src/gl-matrix-min.js',
                      'src/Globals.js',
+                     'src/Animations.js',
                      'src/Configuration.js',
-                     'src/FrameAnimation.js',
                      'src/Transformations.js',
                      'src/Texture.js',
                      'src/Lights.js',
