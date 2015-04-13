@@ -43,6 +43,9 @@ var c_height = 0;
 var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
 var interactor = null;
 var transforms = null;
+var elapsedTime = undefined;
+var initialTime = undefined;
+var frequency = 5;
 
 function resizeCanvas(aubengine){
     c_width = $('#content').width();
@@ -53,6 +56,47 @@ function resizeCanvas(aubengine){
 }
 
 $(window).resize(function(){resizeCanvas();});
+
+'use strict';
+
+function Animation(frequency, scene, times, callback, data) {
+  this.scene = scene;
+  this.frequency = frequency;
+  this.interval = null;
+  this.callback = callback;
+  var stopAnimation = this.stopAnimation;
+  var count = 0;
+  var iTime = (new Date).getTime() + 1000;
+  var eTime;
+
+  this.onFrame = function() {
+    eTime = (new Date).getTime() - iTime;
+      if (eTime < 5) return;
+      var steps = Math.floor(eTime / frequency);
+      while(steps > 0) {
+          if (callback) {
+              if (count == times) break;
+              count++;
+            callback(data);
+          } else {
+            scene.draw();
+          }
+          steps -= 1;
+      };
+      if (count == times) stopAnimation();
+    iTime = (new Date).getTime();
+  };
+};
+
+Animation.prototype.startAnimation = function() {
+  this.iTime = (new Date).getTime();
+  var self = this;
+	this.interval = setInterval(self.onFrame, self.frequency/1000);
+};
+
+Animation.prototype.stopAnimation = function() {
+  clearInterval(this.interval);
+};
 
 var	Configuration = {
 
@@ -199,17 +243,6 @@ var	Configuration = {
     }
 }
 
-requestAnimFrame = (function() {
-    return window.requestAnimationFrame ||
-         window.webkitRequestAnimationFrame ||
-         window.mozRequestAnimationFrame ||
-         window.oRequestAnimationFrame ||
-         window.msRequestAnimationFrame ||
-         function(callback, element) {
-           window.setTimeout(callback, 1000/60);
-         };
-})();
-
 'use strict'
 
 function Transformation(name, position, size, rotation) {
@@ -218,17 +251,30 @@ function Transformation(name, position, size, rotation) {
   this.position = position || [0,0,0];
   this.size = size || [1,1,1];
   this.rotation = rotation || {angle: 0, axis: [0,0,0]};  //angle, axis
+  this.animations = [];
 };
 
 Transformation.prototype.getPosition = function() {
   return this.position;
-}
+};
+
+Transformation.prototype.startAnimation = function() {
+  this.animations.forEach(function(animation) {
+    animation.startAnimation();
+  })
+};
+
+Transformation.prototype.copy = function() {
+  var self = this;
+  var newTransformation = new Transformation(self.name, self.position, self.size, self.rotation);
+  return newTransformation;
+};
 
 Transformation.prototype.beginDraw = function() {
-  transforms.calculateModelView(); //calcula la matriz actual
   transforms.push(); //apila
+  transforms.calculateModelView(); //calcula la matriz actual
   this.mv = transforms.mvMatrix; //hace una copia
-  //TODO add rotation
+
   if (this.position!=null) {
     mat4.translate(this.mv, this.position);
   };
@@ -242,18 +288,38 @@ Transformation.prototype.beginDraw = function() {
   };
 
   transforms.setMatrixUniforms();
-  // this.endDraw();
+  console.log('begin draw ' + this.name);
 };
 
 Transformation.prototype.endDraw = function() {
-  transforms.pop();
+  transforms.pop(); //la desapila y la pone como mvMatrix
   console.log('end draw ' + this.name)
 }
+
+/* ANIMACION */
+Transformation.prototype.rotate = function(rotations) {
+  rotations[0].angle = rotations[1].angle + rotations[0].angle;
+};
+
+Transformation.prototype.translate = function(positions) {
+  vec3.add(positions[0], positions[1], positions[0]);
+};
+
+
+Transformation.prototype.scale = function(size) {
+  this.size = size;
+  return this;
+};
+
+Transformation.prototype.animate = function(frequency, scene, times, callback, data) {
+  this.animations.push(new Animation(frequency, scene, times, callback, data));
+};
 
 function Texture(img){
 	this.texture = gl.createTexture();
 	this.image = new Image();
 	var self = this;
+	this.image.src = img;
 	this.image.onload = function() {
 		gl.bindTexture(gl.TEXTURE_2D, self.texture);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, self.image);
@@ -262,8 +328,6 @@ function Texture(img){
 		gl.generateMipmap(gl.TEXTURE_2D);
 		gl.bindTexture(gl.TEXTURE_2D, null);
 	}
-
-	this.image.src = img;
 };
 
 Texture.prototype.getTexture = function() {
@@ -309,13 +373,13 @@ Light.prototype.setProperty = function(pName, pValue) {
 };
 
 Light.prototype.beginDraw = function(transforms) {
-	transforms.push();
-	Lights.draw();
+	var self = this;
+	Lights.draw(self, transforms);
+	console.log('beginDraw of ' + this.id);
 };
 
 Light.prototype.endDraw = function(transforms) {
-	transforms.pop();
-	console.log('end draw ' + this.id);
+	console.log('endDraw of ' + this.id);
 };
 
 var Lights = {
@@ -358,7 +422,7 @@ var Lights = {
 	},
 
 	//draws all the lights
-	draw: function() {
+	draw: function(light, transforms) {
 		//lights uniform vector, uses PHONG
 		gl.uniform3fv(Program.uLightPosition, Lights.getArray('position'));
 		gl.uniform3fv(Program.uLa, Lights.getArray('ambient'));
@@ -521,7 +585,7 @@ var Program = {
   attributeList : ["aVertexPosition", "aVertexNormal", "aVertexColor", "aVertexTextureCoords"],
   uniformList   : [	"uPMatrix", "uMVMatrix", "uNMatrix", "uLightPosition", "uWireframe",
                     "uLa", "uLd", "uLs", "uKa", "uKd", "uKs", "uNs", "d", "illum", "uTranslateLights",
-                    "uSampler", "uTexture"
+                    "uSampler", "uTextures"
                   ],
 
     getShader : function(gl, id) {
@@ -714,9 +778,12 @@ Mesh.prototype.defaultCoords = function() {
 Mesh.prototype.draw = function() {
   try{
     var object = Scene.getObject(this.getAlias());
-
-
     gl.uniform1i(Program.uWireframe, false);
+    if (object.texture_coords) {
+      gl.uniform1i(Program.uTextures, true);
+    } else {
+      gl.uniform1i(Program.uTextures, false);
+    }
     gl.uniform3fv(Program.uKa, object.Ka);
     gl.uniform3fv(Program.uKd, object.Kd);
     gl.uniform3fv(Program.uKs, object.Ks);
@@ -732,23 +799,20 @@ Mesh.prototype.draw = function() {
     gl.vertexAttribPointer(Program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(Program.aVertexPosition);
 
+
    if(object.d < 1.0){  //tweaking parameters here
          gl.uniform1f(Program.d, 0.14);
         }
+
     /* texture */
     if (object.texture_coords) {
-      // console.info('the object '+object.alias+' has texture coordinates');
-      //
-      textureBufferObject = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, textureBufferObject);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
-
-      gl.uniform1i(Program.uTextures, 1);
       gl.enableVertexAttribArray(Program.aVertexTextureCoords);
+      gl.bindBuffer(gl.ARRAY_BUFFER, object.tbo);
       gl.vertexAttribPointer(Program.aVertexTextureCoords, 2, gl.FLOAT, false, 0, 0);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, object.texture.getTexture());
+      gl.bindTexture(gl.TEXTURE_2D, object.texture.texture);
       gl.uniform1i(Program.uSampler, 0);
+
     };
 
     /* wireframe */
@@ -756,6 +820,8 @@ Mesh.prototype.draw = function() {
       gl.bindBuffer(gl.ARRAY_BUFFER, object.nbo);
       gl.vertexAttribPointer(Program.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(Program.aVertexNormal);
+
+
           }
           else{
               gl.uniform1i(Program.uWireframe, true);
@@ -773,7 +839,6 @@ Mesh.prototype.draw = function() {
           gl.bindBuffer(gl.ARRAY_BUFFER, null);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
-
   }
   catch(err){
       console.error(err.description);
@@ -781,12 +846,12 @@ Mesh.prototype.draw = function() {
 };
 
 Mesh.prototype.beginDraw = function(transforms) {
-  console.log('begin draw' + this.alias);
+  console.log('beginDraw of' + this.alias);
   this.draw();
 }
 
 Mesh.prototype.endDraw = function() {
-  console.log('end draw ' + this.alias);
+  console.log('endDraw of ' + this.alias);
 };
 
 var Scene = {
@@ -836,7 +901,11 @@ var Scene = {
         if (object.diffuse          === undefined)    {   object.diffuse          = [1.0,1.0,1.0,1.0];}
         if (object.ambient          === undefined)    {   object.ambient          = [0.2,0.2,0.2,1.0];}
         if (object.specular         === undefined)    {   object.specular         = [1.0,1.0,1.0,1.0];}
-
+        if (object.texture_coords) {
+          gl.uniform1i(Program.uTextures, true);
+        } else {
+          gl.uniform1i(Program.uTextures, false);
+        }
         //set attributes
        for(var key in attributes){
 			     object[key] = attributes[key];
@@ -867,13 +936,12 @@ var Scene = {
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(object.texture_coords), gl.STATIC_DRAW);
 			object.tbo = textureBufferObject;
 
-            tangentBufferObject = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, tangentBufferObject);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateTangents(object.vertices, object.texture_coords, object.indices)), gl.STATIC_DRAW);
-            gl.bindBuffer(gl.ARRAY_BUFFER,null);
-            object.tanbo = tangentBufferObject;
+      tangentBufferObject = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, tangentBufferObject);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Configuration.calculateTangents(object.vertices, object.texture_coords, object.indices)), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER,null);
+      object.tanbo = tangentBufferObject;
 		}
-
         var indexBufferObject = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferObject);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(object.indices), gl.STATIC_DRAW);
@@ -893,10 +961,10 @@ var Scene = {
          else {
             console.info(object.alias + ' has been added to the scene [Local]');
          }
-
-		 if (aubengine != undefined){
-			aubengine.draw();
-		 }
+    //  
+		//  if (aubengine != undefined) {
+		// 	aubengine.draw();
+    //   };
     },
 
 
@@ -1212,13 +1280,12 @@ Camera.prototype.draw = function() {
 };
 
 Camera.prototype.beginDraw = function() {
-  transforms.push();
   this.draw();
+  console.log('beginDraw of ' + this.alias);
 };
 
 Camera.prototype.endDraw = function() {
-  transforms.pop();
-  console.log('end of draw ' + this.alias);
+  console.log('endDraw of ' + this.alias);
 };
 
 var Cameras = {
@@ -1606,56 +1673,66 @@ function NodeTree(entity, father, children) {
     return (this.children.indexOf(child) != -1);
   };
 
-  NodeTree.prototype.draw = function() {
-    if (this.entity) {
-      this.entity.draw();
-    } else {
-      console.log('There is no entity for this node');
-    }
+  NodeTree.prototype.getChildren = function() {
+    return this.children;
   };
 
-  NodeTree.prototype.endDraw = function() {
+  NodeTree.prototype.draw = function(transforms) {
+    this.getEntity().beginDraw(transforms);
+    this.getChildren().forEach(function(child) {
+      child.draw(transforms);
+    })
+    this.getEntity().endDraw(transforms);
+  };
 
-  }
+  NodeTree.prototype.save = function(aubengine) {
+    var node = this;
+    if (node.getEntity() instanceof Light) Lights.add(node.getEntity(), node.getFather().getEntity().getPosition());
+      else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity(), node.getFather().getEntity().getPosition());
+      else if (node.getEntity() instanceof Mesh) {
+        Scene.loadObject(node.getEntity().getFilename(),
+                         node.getEntity().getAlias(),
+                         node.getEntity().getAttributes(), aubengine);
+      };
+    node.getChildren().forEach(function(child) {
+      child.save(aubengine);
+    })
+  };
 
 'use strict';
 
   function Tree() {
     this.root = new NodeTree();
+    this.isDraw = false;
   };
 
   Tree.prototype.getRoot = function() {
     return this.root;
   };
 
-  Tree.prototype.drawPreorder = function(node, transforms) {
-    if (node == null) return;
-    node.getEntity().beginDraw(transforms);
-    this.drawPreorder(node.firstChild(),transforms);
-    this.drawPreorder(node.nextSibling(),transforms);
-    node.getEntity().endDraw(transforms);
+  Tree.prototype.setDraw = function(draw) {
+    this.isDraw = draw;
   };
 
-  Tree.prototype.save = function(node, aubengine) {
-    if (node == null) return;
-    if (node.getEntity() instanceof Light) Lights.add(node.getEntity(), node.getFather().getEntity().getPosition());
-    else if (node.getEntity() instanceof Camera) Cameras.add(node.getEntity(), node.getFather().getEntity().getPosition());
-    else if (node.getEntity() instanceof Mesh) {
-      Scene.loadObject(node.getEntity().getFilename(),
-                       node.getEntity().getAlias(),
-                       node.getEntity().getAttributes(), aubengine);
-    };
-    this.save(node.firstChild(), aubengine);
-    this.save(node.nextSibling(), aubengine);
+  Tree.prototype.getDraw = function() {
+    return this.isDraw;
   };
 
   Tree.prototype.draw = function(transforms) {
-    this.drawPreorder(this.getRoot().firstChild(), transforms);
+    this.getRoot().getChildren().forEach(function(child) {
+      child.draw(transforms);
+    });
   };
 
-  Tree.prototype.saveEntities = function(draw) {
-    this.save(this.getRoot().firstChild(), draw);
+  Tree.prototype.save = function(aubengine) {
+    this.getRoot().getChildren().forEach(function(child) {
+      child.save(aubengine);
+    });
+  };
 
+  Tree.prototype.saveEntities = function(aubengine, callback) {
+    var self = this;
+    this.save(self.getRoot().firstChild(), aubengine, callback);
   };
 
 var WEBGLAPP_RENDER      = undefined;
@@ -1671,6 +1748,11 @@ function Aubengine(canvas, tree) {
 
     this.camera = null;
     this.canvas = canvas;
+    //drawing loop
+    initialTime = undefined;
+    elapsedTime = undefined;
+    this.frequency = 5;
+
 }
 
 Aubengine.prototype.getTree = function() {
@@ -1760,37 +1842,13 @@ Aubengine.prototype.addNode = function(father, node) {
 
 Aubengine.prototype.createNode = function(entity) {
   var node = new NodeTree(entity);
-  console.log(node);
   return node;
 };
 
-
 Aubengine.prototype.draw = function() {
+  var self = this;
   gl.viewport(0, 0, c_width, c_height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  this.transforms.updatePerspective();
-  this.tree.draw(this.transforms);
- }
-
-Aubengine.prototype.start = function() {
-        WEBGLAPP_RENDER = this.draw;
-        renderLoop();
- }
-
-Aubengine.prototype.refresh = function(){
-    if (WEBGLAPP_RENDER) WEBGLAPP_RENDER(false);
- }
-
-renderLoop = function(){
-     WEBGLAPP_TIMER_ID = setInterval(WEBGLAPP_RENDER, WEBGLAPP_RENDER_RATE);
-}
-
-window.onblur = function(){
-    clearInterval(WEBGLAPP_TIMER_ID);
-    console.info('Rendering stopped');
-}
-
-window.onfocus = function(){
-    renderLoop();
-    console.info('Rendering resumed');
-}
+  self.transforms.updatePerspective();
+  self.getTree().draw(self.transforms);
+};
