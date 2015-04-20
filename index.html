@@ -19,7 +19,7 @@ function endDraw() {
 function runShowRoom() {
   aubengine = new Aubengine("the-canvas");
   var cubeTexture = new Texture('textures/marble.png');
-  aubengine.setUpEnvironment();
+  aubengine.setUpEnvironment("#0CB6B6", 1);
   //create main camera
   var camera1          = aubengine.createCamera('camera1',[0.0,0.0,0.0], 10,-11);
   var camera2          = aubengine.createCamera('camera2',[0.0,10.0,10.0], -700,-70); //from the cube
@@ -55,9 +55,8 @@ function runShowRoom() {
   var nleft  = aubengine.createLight('nleft',  [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
   var nright = aubengine.createLight('nright', [0.4,0.4,0.4],[0.0,0.0,0.0],[0.8,0.8,0.8]);
 
-  //create some meshes
   var cube  = aubengine.createMesh('models/complexCube.json', 'cube', cubeTexture);
-  // cube.setSpecularColor(255, 123, 19);
+  cube.setSpecularColor(255, 123, 19);
 
   var sphere = aubengine.createMesh('models/sphere.json', 'sphere');
   sphere.setSpecularColor(40, 255, 255);
@@ -104,15 +103,16 @@ function runShowRoom() {
   aubengine.addNode(transform5, meshNode);
 
   var transform7 = aubengine.createNode(chairTransform);
-  chairTransform.animate(1, aubengine, 100, chairTransform.translate, [chairTransform.position, [0.05,0,0]]);
-  chairTransform.animate(15, aubengine, 50, chairTransform.rotate, [chairTransform.rotation, {angle: 5, axis: [0,0,0]}]);
+  // chairTransform.animate(15, aubengine, 50, chairTransform.rotate, [chairTransform.rotation, {angle: 5, axis: [0,1,0]}]);
 
   aubengine.addNode(aubengine.getRoot(), transform7);
   var meshNode3 = aubengine.createNode(chair);
   aubengine.addNode(transform7, meshNode3);
 
   //mesh2
-  // var transform6 = aubengine.createNode(cubeTransform);
+  var transform6 = aubengine.createNode(cubeTransform);
+  sphereTransform.animate(5, 100, sphereTransform.translate, [sphereTransform.position, [-0.05,0,0]]);
+
   // aubengine.addNode(aubengine.getRoot(), transform6);
   // var meshNode2 = aubengine.createNode(cube);
   // aubengine.addNode(transform6, meshNode2);
@@ -121,9 +121,11 @@ function runShowRoom() {
 
   aubengine.getTree().saveEntities(aubengine, endDraw);
   aubengine.setMainCamera(Cameras.get(0));
-  var animation = new Animation(2, aubengine, 100);
+  aubengine.addFloor(true);
+
+  var animation = new Animation(5, 1000, aubengine.draw, null, aubengine);
   animation.startAnimation();
-  chairTransform.startAnimation();
+  sphereTransform.startAnimation();
   // animation.stopAnimation();
 };
 

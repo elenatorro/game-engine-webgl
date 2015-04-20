@@ -30,10 +30,8 @@ Aubengine.prototype.getTransforms = function() {
   return this.transforms;
 }
 
-Aubengine.prototype.setUpEnvironment = function () {
-  gl.clearColor(56/255,161/255,172/255, 1.0);
-  gl.clearDepth(1.0);
-
+Aubengine.prototype.setUpEnvironment = function(color, opacity) {
+  this.changeColor(color, opacity);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.BLEND);
@@ -41,7 +39,13 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
   this.loadProgram();
-}
+};
+
+Aubengine.prototype.changeColor = function(color, opacity) {
+  var clearColor = Color.hex2rgb(color, opacity);
+  gl.clearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+  gl.clearDepth(1.0);
+};
 
 Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
   var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, focus, azimuth, elevation);

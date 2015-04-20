@@ -43,9 +43,6 @@ var c_height = 0;
 var names    = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
 var interactor = null;
 var transforms = null;
-var elapsedTime = undefined;
-var initialTime = undefined;
-var frequency = 5;
 
 function resizeCanvas(aubengine){
     c_width = $('#content').width();
@@ -59,43 +56,44 @@ $(window).resize(function(){resizeCanvas();});
 
 'use strict';
 
-function Animation(frequency, scene, times, callback, data) {
-  this.scene = scene;
-  this.frequency = frequency;
-  this.interval = null;
-  this.callback = callback;
-  var stopAnimation = this.stopAnimation;
+function Animation(frequency, times, callback, data, callbackObj) {
+  this.frequency   = frequency;
+  this.interval    = null;
+  if (callbackObj) {
+    this.callbackObj     = callbackObj;
+    callbackObj.callback = callback;
+  } else {
+    this.callbackObj = {callback: callback}
+  }
   var count = 0;
-  var iTime = (new Date).getTime() + 1000;
   var eTime;
-
-  this.onFrame = function() {
-    eTime = (new Date).getTime() - iTime;
-      if (eTime < 5) return;
-      var steps = Math.floor(eTime / frequency);
-      while(steps > 0) {
-          if (callback) {
-              if (count == times) break;
-              count++;
-            callback(data);
-          } else {
-            scene.draw();
-          }
-          steps -= 1;
-      };
-      if (count == times) stopAnimation();
-    iTime = (new Date).getTime();
-  };
-};
-
-Animation.prototype.startAnimation = function() {
-  this.iTime = (new Date).getTime();
   var self = this;
-	this.interval = setInterval(self.onFrame, self.frequency/1000);
-};
+  
+  this.onFrame = function() {
+    var stopAnimation = function() {
+      clearInterval(self.interval);
+    };
 
-Animation.prototype.stopAnimation = function() {
-  clearInterval(this.interval);
+    eTime = (new Date).getTime() - self.iTime;
+    if (eTime < 5) return;
+    var steps = Math.floor(eTime / frequency);
+    while ((steps > 0) && (count != times)) {
+      self.callbackObj.callback(data);
+      steps -= 1;
+      count++;
+    };
+
+    if (count == times) {
+        stopAnimation();
+    };
+
+    self.iTime = (new Date).getTime();
+  };
+
+  this.startAnimation = function() {
+    self.iTime = (new Date).getTime();
+    self.interval = setInterval(self.onFrame, self.frequency/1000);
+  };
 };
 
 var	Configuration = {
@@ -296,19 +294,18 @@ Transformation.prototype.endDraw = function() {
   console.log('end draw ' + this.name)
 }
 
-/* ANIMACION */
+/* ANIMATION */
 Transformation.prototype.rotate = function(rotations) {
   rotations[0].angle = rotations[1].angle + rotations[0].angle;
+  vec3.add(rotations[0].axis, rotations[1].axis, rotations[0].axis);
 };
 
 Transformation.prototype.translate = function(positions) {
   vec3.add(positions[0], positions[1], positions[0]);
 };
 
-
-Transformation.prototype.scale = function(size) {
-  this.size = size;
-  return this;
+Transformation.prototype.scale = function(sizes) {
+  vec3.add(sizes[0], sizes[1], sizes[0]);
 };
 
 Transformation.prototype.animate = function(frequency, scene, times, callback, data) {
@@ -1102,7 +1099,7 @@ var Color = {
 
   rgb2decimal: function(r,g,b) {
     return [r/255, g/255, b/255];
-	  
+
   }
 }
 
@@ -1701,39 +1698,39 @@ function NodeTree(entity, father, children) {
 
 'use strict';
 
-  function Tree() {
-    this.root = new NodeTree();
-    this.isDraw = false;
-  };
+function Tree() {
+  this.root = new NodeTree();
+  this.isDraw = false;
+};
 
-  Tree.prototype.getRoot = function() {
-    return this.root;
-  };
+Tree.prototype.getRoot = function() {
+  return this.root;
+};
 
-  Tree.prototype.setDraw = function(draw) {
-    this.isDraw = draw;
-  };
+Tree.prototype.setDraw = function(draw) {
+  this.isDraw = draw;
+};
 
-  Tree.prototype.getDraw = function() {
-    return this.isDraw;
-  };
+Tree.prototype.getDraw = function() {
+  return this.isDraw;
+};
 
-  Tree.prototype.draw = function(transforms) {
-    this.getRoot().getChildren().forEach(function(child) {
-      child.draw(transforms);
-    });
-  };
+Tree.prototype.draw = function(transforms) {
+  this.getRoot().getChildren().forEach(function(child) {
+    child.draw(transforms);
+  });
+};
 
-  Tree.prototype.save = function(aubengine) {
-    this.getRoot().getChildren().forEach(function(child) {
-      child.save(aubengine);
-    });
-  };
+Tree.prototype.save = function(aubengine) {
+  this.getRoot().getChildren().forEach(function(child) {
+    child.save(aubengine);
+  });
+};
 
-  Tree.prototype.saveEntities = function(aubengine, callback) {
-    var self = this;
-    this.save(self.getRoot().firstChild(), aubengine, callback);
-  };
+Tree.prototype.saveEntities = function(aubengine, callback) {
+  var self = this;
+  this.save(self.getRoot().firstChild(), aubengine, callback);
+};
 
 var WEBGLAPP_RENDER      = undefined;
 var WEBGLAPP_TIMER_ID    = -1;
@@ -1767,10 +1764,8 @@ Aubengine.prototype.getTransforms = function() {
   return this.transforms;
 }
 
-Aubengine.prototype.setUpEnvironment = function () {
-  gl.clearColor(56/255,161/255,172/255, 1.0);
-  gl.clearDepth(1.0);
-
+Aubengine.prototype.setUpEnvironment = function(color, opacity) {
+  this.changeColor(color, opacity);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.BLEND);
@@ -1778,7 +1773,13 @@ Aubengine.prototype.setUpEnvironment = function () {
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
   this.loadProgram();
-}
+};
+
+Aubengine.prototype.changeColor = function(color, opacity) {
+  var clearColor = Color.hex2rgb(color, opacity);
+  gl.clearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+  gl.clearDepth(1.0);
+};
 
 Aubengine.prototype.createCamera = function(alias, focus, azimuth, elevation) {
   var    camera = new Camera(alias, CAMERA_ORBITING_TYPE, focus, azimuth, elevation);

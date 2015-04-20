@@ -4,7 +4,7 @@
 <meta http-equiv='content-type' content='text/html; charset=ISO-8859-1'>
 <link href='assets/styles/bootstrap.min.css'   type='text/css' rel='stylesheet'>
 <link href='assets/styles/style.css'   type='text/css' rel='stylesheet'>
-<script type='text/javascript' src='dist/dependencies.js'></script>
+<!-- <script type='text/javascript' src='dist/dependencies.js'></script> -->
 <script type='text/javascript' src='dist/Aubengine.js'></script>
 
 <script type="text/javascript">
@@ -126,8 +126,9 @@ function runShowRoom(){
   aubengine.addNode(transform7, tomateTopNode);
 
   aubengine.getTree().saveEntities(aubengine);
-
   aubengine.setMainCamera(Cameras.get(0));
+  var animation = new Animation(5, aubengine, 3);
+  animation.startAnimation();
 };
 </script>
 </head>
@@ -142,7 +143,7 @@ function runShowRoom(){
     <canvas id='the-canvas'></canvas>
 </div>
 
-<script type='text/javascript'>resizeCanvas();</script>
+<script type='text/javascript'>resizeCanvas(aubengine);</script>
 <script type='text/javascript'>document.getElementById('draw').addEventListener('click', function(event) {
   aubengine.draw();
 });</script>

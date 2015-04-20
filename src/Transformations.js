@@ -51,19 +51,18 @@ Transformation.prototype.endDraw = function() {
   console.log('end draw ' + this.name)
 }
 
-/* ANIMACION */
+/* ANIMATION */
 Transformation.prototype.rotate = function(rotations) {
   rotations[0].angle = rotations[1].angle + rotations[0].angle;
+  vec3.add(rotations[0].axis, rotations[1].axis, rotations[0].axis);
 };
 
 Transformation.prototype.translate = function(positions) {
   vec3.add(positions[0], positions[1], positions[0]);
 };
 
-
-Transformation.prototype.scale = function(size) {
-  this.size = size;
-  return this;
+Transformation.prototype.scale = function(sizes) {
+  vec3.add(sizes[0], sizes[1], sizes[0]);
 };
 
 Transformation.prototype.animate = function(frequency, scene, times, callback, data) {

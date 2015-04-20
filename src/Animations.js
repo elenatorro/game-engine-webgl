@@ -1,40 +1,41 @@
 'use strict';
 
-function Animation(frequency, scene, times, callback, data) {
-  this.scene = scene;
-  this.frequency = frequency;
-  this.interval = null;
-  this.callback = callback;
-  var stopAnimation = this.stopAnimation;
+function Animation(frequency, times, callback, data, callbackObj) {
+  this.frequency   = frequency;
+  this.interval    = null;
+  if (callbackObj) {
+    this.callbackObj     = callbackObj;
+    callbackObj.callback = callback;
+  } else {
+    this.callbackObj = {callback: callback}
+  }
   var count = 0;
-  var iTime = (new Date).getTime() + 1000;
   var eTime;
-
-  this.onFrame = function() {
-    eTime = (new Date).getTime() - iTime;
-      if (eTime < 5) return;
-      var steps = Math.floor(eTime / frequency);
-      while(steps > 0) {
-          if (callback) {
-              if (count == times) break;
-              count++;
-            callback(data);
-          } else {
-            scene.draw();
-          }
-          steps -= 1;
-      };
-      if (count == times) stopAnimation();
-    iTime = (new Date).getTime();
-  };
-};
-
-Animation.prototype.startAnimation = function() {
-  this.iTime = (new Date).getTime();
   var self = this;
-	this.interval = setInterval(self.onFrame, self.frequency/1000);
-};
+  
+  this.onFrame = function() {
+    var stopAnimation = function() {
+      clearInterval(self.interval);
+    };
 
-Animation.prototype.stopAnimation = function() {
-  clearInterval(this.interval);
+    eTime = (new Date).getTime() - self.iTime;
+    if (eTime < 5) return;
+    var steps = Math.floor(eTime / frequency);
+    while ((steps > 0) && (count != times)) {
+      self.callbackObj.callback(data);
+      steps -= 1;
+      count++;
+    };
+
+    if (count == times) {
+        stopAnimation();
+    };
+
+    self.iTime = (new Date).getTime();
+  };
+
+  this.startAnimation = function() {
+    self.iTime = (new Date).getTime();
+    self.interval = setInterval(self.onFrame, self.frequency/1000);
+  };
 };
