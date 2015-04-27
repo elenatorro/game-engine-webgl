@@ -131,11 +131,9 @@ CameraInteractor.prototype.onKeyDown = function(ev){
 		}
         else if (this.key == 87) {  //w
             if(fovy) fovy+=5;
-            console.info('FovY:'+fovy);
         }
         else if (this.key == 78) { //n
             if(fovy) fovy-=5;
-            console.info('FovY:'+fovy);
         }
 
 	}

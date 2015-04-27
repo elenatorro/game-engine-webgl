@@ -173,11 +173,9 @@ Camera.prototype.draw = function() {
 
 Camera.prototype.beginDraw = function() {
   this.draw();
-  console.log('beginDraw of ' + this.alias);
 };
 
 Camera.prototype.endDraw = function() {
-  console.log('endDraw of ' + this.alias);
 };
 
 var Cameras = {

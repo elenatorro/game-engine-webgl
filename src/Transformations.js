@@ -43,12 +43,10 @@ Transformation.prototype.beginDraw = function() {
   };
 
   transforms.setMatrixUniforms();
-  console.log('begin draw ' + this.name);
 };
 
 Transformation.prototype.endDraw = function() {
   transforms.pop(); //la desapila y la pone como mvMatrix
-  console.log('end draw ' + this.name)
 }
 
 /* ANIMATION */
