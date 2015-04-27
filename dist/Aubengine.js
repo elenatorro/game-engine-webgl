@@ -286,12 +286,10 @@ Transformation.prototype.beginDraw = function() {
   };
 
   transforms.setMatrixUniforms();
-  console.log('begin draw ' + this.name);
 };
 
 Transformation.prototype.endDraw = function() {
   transforms.pop(); //la desapila y la pone como mvMatrix
-  console.log('end draw ' + this.name)
 }
 
 /* ANIMATION */
@@ -372,11 +370,9 @@ Light.prototype.setProperty = function(pName, pValue) {
 Light.prototype.beginDraw = function(transforms) {
 	var self = this;
 	Lights.draw(self, transforms);
-	console.log('beginDraw of ' + this.id);
 };
 
 Light.prototype.endDraw = function(transforms) {
-	console.log('endDraw of ' + this.id);
 };
 
 var Lights = {
@@ -703,6 +699,11 @@ Mesh.prototype.setSpecularColor = function(r,g,b) {
   this.Kd = Color.rgb2decimal(r,g,b);
 };
 
+Mesh.prototype.setColor = function(color, lum) {
+  var luminosity = Color.luminance(color, lum);
+  this.Kd = Color.hex2rgb(luminosity);
+}
+
 Mesh.prototype.getPosition = function() {
   return this.position;
 };
@@ -843,12 +844,10 @@ Mesh.prototype.draw = function() {
 };
 
 Mesh.prototype.beginDraw = function(transforms) {
-  console.log('beginDraw of' + this.alias);
   this.draw();
 }
 
 Mesh.prototype.endDraw = function() {
-  console.log('endDraw of ' + this.alias);
 };
 
 var Scene = {
@@ -863,7 +862,6 @@ var Scene = {
 
     loadObject : function(filename,alias,attributes,aubengine) {
         var request = new XMLHttpRequest();
-        console.info('Requesting ' + filename);
         request.open("GET",filename);
 
         request.onreadystatechange = function() {
@@ -958,7 +956,7 @@ var Scene = {
          else {
             console.info(object.alias + ' has been added to the scene [Local]');
          }
-    //  
+    //
 		//  if (aubengine != undefined) {
 		// 	aubengine.draw();
     //   };
@@ -977,7 +975,6 @@ var Scene = {
 		if (idx == 0) return;
 		this.objects.splice(idx, 1);
 		this.objects.splice(0,0,o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderLast: function(objectName){
@@ -986,7 +983,6 @@ var Scene = {
 		if (idx == 0) return;
 		this.objects.splice(idx, 1);
 		this.objects.push(o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderSooner : function(objectName){
@@ -995,7 +991,6 @@ var Scene = {
 		if (idx == 0) return; //can't bring it forward further than to the first place
 		this.objects.splice(idx,1);
 		this.objects.splice(idx-1,0,o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderLater: function(objectName){
@@ -1004,7 +999,6 @@ var Scene = {
 		if (idx == this.objects.length-1) return; //can't send it back further than to the last place
 		this.objects.splice(idx,1);
 		this.objects.splice(idx+1,0,o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderOrder: function(){
@@ -1082,12 +1076,12 @@ var Floor = {
 'use strict';
 
 var Color = {
-  hex2rgb: function(hex, opacity) {
+  hex2rgb: function(hex) {
     var hexStr = hex.replace('#','');
     var r = parseInt(hexStr.substring(0,2), 16);
     var g = parseInt(hexStr.substring(2,4), 16);
     var b = parseInt(hexStr.substring(4,6), 16);
-    return [r/255,g/255,b/255,opacity];
+    return [r/255,g/255,b/255];
   },
 
   rgb2hex: function(rgb) {
@@ -1099,7 +1093,24 @@ var Color = {
 
   rgb2decimal: function(r,g,b) {
     return [r/255, g/255, b/255];
+  },
 
+  luminance: function(hex, lum) {
+    // validate hex string
+
+    hex = String(hex).replace(/[^0-9a-f]/gi, '');
+    if (hex.length < 6) {
+      hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+    }
+    lum = lum || 0;
+
+    // convert to decimal and change luminosity
+    var rgb = "#", c, i;
+    for (i = 0; i < 3; i++) {
+      c = parseInt(hex.substr(i*2,2), 16);
+      c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
+      rgb += ("00"+c).substr(c.length);
+    }
   }
 }
 
@@ -1278,11 +1289,9 @@ Camera.prototype.draw = function() {
 
 Camera.prototype.beginDraw = function() {
   this.draw();
-  console.log('beginDraw of ' + this.alias);
 };
 
 Camera.prototype.endDraw = function() {
-  console.log('endDraw of ' + this.alias);
 };
 
 var Cameras = {
@@ -1458,11 +1467,9 @@ CameraInteractor.prototype.onKeyDown = function(ev){
 		}
         else if (this.key == 87) {  //w
             if(fovy) fovy+=5;
-            console.info('FovY:'+fovy);
         }
         else if (this.key == 78) { //n
             if(fovy) fovy-=5;
-            console.info('FovY:'+fovy);
         }
 
 	}
