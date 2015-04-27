@@ -39,11 +39,9 @@ Light.prototype.setProperty = function(pName, pValue) {
 Light.prototype.beginDraw = function(transforms) {
 	var self = this;
 	Lights.draw(self, transforms);
-	console.log('beginDraw of ' + this.id);
 };
 
 Light.prototype.endDraw = function(transforms) {
-	console.log('endDraw of ' + this.id);
 };
 
 var Lights = {

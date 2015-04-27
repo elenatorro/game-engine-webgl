@@ -46,6 +46,11 @@ Mesh.prototype.setSpecularColor = function(r,g,b) {
   this.Kd = Color.rgb2decimal(r,g,b);
 };
 
+Mesh.prototype.setColor = function(color, lum) {
+  var luminosity = Color.luminance(color, lum);
+  this.Kd = Color.hex2rgb(luminosity);
+}
+
 Mesh.prototype.getPosition = function() {
   return this.position;
 };
@@ -186,10 +191,8 @@ Mesh.prototype.draw = function() {
 };
 
 Mesh.prototype.beginDraw = function(transforms) {
-  console.log('beginDraw of' + this.alias);
   this.draw();
 }
 
 Mesh.prototype.endDraw = function() {
-  console.log('endDraw of ' + this.alias);
 };

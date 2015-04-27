@@ -10,7 +10,6 @@ var Scene = {
 
     loadObject : function(filename,alias,attributes,aubengine) {
         var request = new XMLHttpRequest();
-        console.info('Requesting ' + filename);
         request.open("GET",filename);
 
         request.onreadystatechange = function() {
@@ -105,7 +104,7 @@ var Scene = {
          else {
             console.info(object.alias + ' has been added to the scene [Local]');
          }
-    //  
+    //
 		//  if (aubengine != undefined) {
 		// 	aubengine.draw();
     //   };
@@ -124,7 +123,6 @@ var Scene = {
 		if (idx == 0) return;
 		this.objects.splice(idx, 1);
 		this.objects.splice(0,0,o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderLast: function(objectName){
@@ -133,7 +131,6 @@ var Scene = {
 		if (idx == 0) return;
 		this.objects.splice(idx, 1);
 		this.objects.push(o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderSooner : function(objectName){
@@ -142,7 +139,6 @@ var Scene = {
 		if (idx == 0) return; //can't bring it forward further than to the first place
 		this.objects.splice(idx,1);
 		this.objects.splice(idx-1,0,o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderLater: function(objectName){
@@ -151,7 +147,6 @@ var Scene = {
 		if (idx == this.objects.length-1) return; //can't send it back further than to the last place
 		this.objects.splice(idx,1);
 		this.objects.splice(idx+1,0,o);
-		console.info('render order:' + this.renderOrder());
 	},
 
 	renderOrder: function(){
